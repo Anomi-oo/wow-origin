@@ -1,0 +1,28 @@
+# 依赖与构建产物
+node_modules/
+dist/
+coverage/
+*.log
+
+# 本地运行数据与凭据
+data/
+.env
+.env.*
+
+# 测试、文档和开发工具
+tests/
+platforms/test/
+*.test.js
+jest.config.js
+README.md
+docs/
+.git/
+.github/
+.gitignore
+.DS_Store
+.idea/
+.vscode/
+
+# 本地编排与辅助脚本
+docker-compose*.yml
+build.sh

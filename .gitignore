@@ -1,0 +1,23 @@
+node_modules/
+docs/
+dist/
+data/*
+!data/.gitkeep
+!data/accounts.example.json
+
+# 测试覆盖率报告
+coverage/
+*.lcov
+fetch.test.js
+result.test.json
+
+# 环境变量
+.env
+.env.local
+.env.*.local
+
+# 本地系统和编辑器文件
+.DS_Store
+.idea/
+.vscode/
+*.log

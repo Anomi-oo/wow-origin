@@ -1,0 +1,21 @@
+services:
+  aduoer-wow:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: aduoer-wow:local
+    container_name: aduoer-wow
+    ports:
+      - "${HOST_PORT:-3000}:${PORT:-3000}"
+    env_file:
+      - .env
+    environment:
+      CORS_ALLOW_ORIGIN: "${CORS_ALLOW_ORIGIN:-*}"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

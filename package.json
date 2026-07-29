@@ -1,0 +1,53 @@
+{
+  "name": "wow-origin",
+  "version": "1.0.0",
+  "description": "多平台音乐API服务器，提供网易云音乐、QQ音乐等平台的统一API接口",
+  "main": "dist/server.js",
+  "scripts": {
+    "start": "npm run build && node dist/server.js",
+    "dev": "npm run build && NODE_ENV=development LOG_LEVEL=info node dist/server.js",
+    "debug": "npm run build && NODE_ENV=development LOG_LEVEL=debug node dist/server.js",
+    "build": "npm run clean && tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:unit": "jest tests/unit",
+    "test:integration": "jest tests/integration",
+    "clean": "rm -rf coverage dist"
+  },
+  "keywords": [
+    "music",
+    "api",
+    "netease",
+    "qq-music",
+    "multi-platform",
+    "music-api",
+    "rest-api"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "dependencies": {
+    "aduoer-wow-sdk": "^0.1.3",
+    "axios": "^1.18.1",
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^17.4.2",
+    "express": "^5.1.0",
+    "got": "^11.8.6",
+    "qrc-decoder": "1.0.2",
+    "tough-cookie": "^6.0.0"
+  },
+  "devDependencies": {
+    "@types/cookie-parser": "^1.4.10",
+    "@types/express": "^5.0.3",
+    "@types/node": "^22.15.32",
+    "jest": "^30.2.0",
+    "supertest": "^7.1.4",
+    "ts-jest": "^29.1.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
+  }
+}

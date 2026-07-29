@@ -1,0 +1,18 @@
+[
+  {
+    "platform": "qq",
+    "name": "QQ 音乐",
+    "cookie": "",
+    "api_access_key": "CHANGE_ME_TO_A_UNIQUE_RANDOM_KEY",
+    "stateless": false,
+    "needUnlock": true
+  },
+  {
+    "platform": "netease",
+    "name": "网易云音乐",
+    "cookie": "",
+    "api_access_key": "CHANGE_ME_TO_ANOTHER_UNIQUE_RANDOM_KEY",
+    "stateless": false,
+    "needUnlock": true
+  }
+]
