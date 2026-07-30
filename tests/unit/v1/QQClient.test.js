@@ -111,13 +111,17 @@ describe('QQClient', () => {
     await Promise.resolve()
     expect(callModule).toHaveBeenCalledWith('lyric', expect.any(Object))
     expect(callModule).toHaveBeenCalledWith('lyric/new', expect.any(Object))
-    releaseLineLyrics({ code: 200, lrc: { lyric: '逐行歌词' } })
+    releaseLineLyrics({
+      code: 200,
+      lrc: { lyric: '逐行歌词' },
+      tlyric: { lyric: '逐行翻译' }
+    })
     releaseWordLyrics({ code: 200, yrc: { lyric: '[0,1000]歌(0,500)词(500,500)' } })
 
     await expect(resultPromise).resolves.toEqual({
       lyric: '逐行歌词',
       wordLyric: '[0,1000]歌(0,500)词(500,500)',
-      translateLyric: '',
+      translateLyric: '逐行翻译',
       translateWordLyric: ''
     })
   })

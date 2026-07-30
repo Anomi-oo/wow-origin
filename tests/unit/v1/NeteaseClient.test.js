@@ -64,11 +64,18 @@ describe('NeteaseClient', () => {
 
   test('getTrackLyric 返回逐行与逐字歌词', async () => {
     const callModule = jest.fn((route) => {
-      if (route === 'lyric') return Promise.resolve({ code: 200, lrc: { lyric: '逐行歌词' } })
+      if (route === 'lyric') {
+        return Promise.resolve({
+          code: 200,
+          lrc: { lyric: '逐行歌词' },
+          tlyric: { lyric: '逐行翻译' }
+        })
+      }
       if (route === 'lyric/new') {
         return Promise.resolve({
           code: 200,
-          yrc: { lyric: '{"t":0,"c":[{"tx":"作词"}]}\n[0,1000](0,500,0)歌(500,500,0)词' }
+          yrc: { lyric: '{"t":0,"c":[{"tx":"作词"}]}\n[0,1000](0,500,0)歌(500,500,0)词' },
+          ytlrc: { lyric: '[0,1000](0,1000,0)翻译' }
         })
       }
       return Promise.resolve({ code: 200 })
@@ -79,8 +86,8 @@ describe('NeteaseClient', () => {
     await expect(client.getTrackLyric('33418857')).resolves.toEqual({
       lyric: '逐行歌词',
       wordLyric: '[0,1000](0,500,0)歌(500,500,0)词',
-      translateLyric: '',
-      translateWordLyric: ''
+      translateLyric: '逐行翻译',
+      translateWordLyric: '[0,1000](0,1000,0)翻译'
     })
   })
 

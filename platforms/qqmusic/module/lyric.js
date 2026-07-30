@@ -12,7 +12,7 @@ module.exports = async (query, request) => {
     roma: 0,
     roma_t: 0,
     songID: songId,
-    trans: 0,
+    trans: 1,
     trans_t: 0,
     type: 0,
     qrc: 0
@@ -22,11 +22,15 @@ module.exports = async (query, request) => {
   })
 
   const body = response.body || response
+  const translation = decodeBase64(body.trans)
   return {
     lrc: {
       version: Number(body.lrc_t) || 0,
       lyric: decodeBase64(body.lyric)
-    }
+    },
+    ...(translation
+      ? { tlyric: { version: Number(body.trans_t) || 0, lyric: translation } }
+      : {})
   }
 }
 

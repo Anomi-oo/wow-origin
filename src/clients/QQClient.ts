@@ -182,10 +182,10 @@ export class QQClient extends MusicClientBase {
   }
 
   async getTrackLyric(id: string): Promise<TrackLyrics> {
-    const lineLyricsPromise = this.getTrackLineLyric(id).catch(() => '');
-    const wordLyricsPromise = this.getTrackWordLyric(id).catch(() => '');
-    const [lyric, wordLyric] = await Promise.all([lineLyricsPromise, wordLyricsPromise]);
-    return { lyric, wordLyric, translateLyric: '', translateWordLyric: '' };
+    const lineLyricsPromise = this.call('lyric', { mid: id }).catch(() => ({}));
+    const wordLyricsPromise = this.call('lyric_new', { mid: id }).catch(() => ({}));
+    const [lineLyrics, wordLyrics] = await Promise.all([lineLyricsPromise, wordLyricsPromise]);
+    return mapTrackLyrics(lineLyrics, wordLyrics);
   }
 
   async getTrackLineLyric(id: string): Promise<string> {

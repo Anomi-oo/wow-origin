@@ -13,7 +13,7 @@ module.exports = async (query, request) => {
     roma: 0,
     roma_t: 0,
     songID: songId,
-    trans: 0,
+    trans: 1,
     trans_t: 0,
     type: 0,
     qrc: 1
@@ -23,8 +23,12 @@ module.exports = async (query, request) => {
   })
 
   const body = response.body || response
+  const translation = decodeBase64(body.trans)
+  const translatedLyrics = translation
+    ? { tlyric: { version: Number(body.trans_t) || 0, lyric: translation } }
+    : {}
   if (body.qrc !== 1 || typeof body.lyric !== 'string' || !body.lyric) {
-    return { yrc: { version: 0, lyric: '' } }
+    return { yrc: { version: 0, lyric: '' }, ...translatedLyrics }
   }
 
   const decrypted = decryptQrc(body.lyric)
@@ -32,7 +36,8 @@ module.exports = async (query, request) => {
     yrc: {
       version: Number(body.qrc_t) || 0,
       lyric: extractLyricContent(decrypted)
-    }
+    },
+    ...translatedLyrics
   }
 }
 
@@ -56,6 +61,11 @@ function extractLyricContent(value) {
   if (!match) return ''
 
   return decodeXmlEntities(match[1]).trim()
+}
+
+function decodeBase64(value) {
+  if (typeof value !== 'string' || !value) return ''
+  return Buffer.from(value, 'base64').toString('utf8')
 }
 
 function decodeXmlEntities(value) {

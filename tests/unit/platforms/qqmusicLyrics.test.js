@@ -6,32 +6,45 @@ const QRC_FIXTURE = '0c8d67dd3e549974b64ed2680459f13881aa15d10db4cc8324b86311d0d
 describe('QQ 歌词模块', () => {
   test('lyric 请求逐行 LRC 并解码 Base64', async () => {
     const request = jest.fn().mockResolvedValue({
-      body: { lyric: Buffer.from('[00:01.00]歌词').toString('base64'), lrc_t: 12 }
+      body: {
+        lyric: Buffer.from('[00:01.00]歌词').toString('base64'),
+        trans: Buffer.from('[00:01.00]翻译').toString('base64'),
+        lrc_t: 12,
+        trans_t: 13
+      }
     })
 
     await expect(lyric({ id: 123 }, request)).resolves.toEqual({
-      lrc: { version: 12, lyric: '[00:01.00]歌词' }
+      lrc: { version: 12, lyric: '[00:01.00]歌词' },
+      tlyric: { version: 13, lyric: '[00:01.00]翻译' }
     })
     expect(request).toHaveBeenCalledWith(
       'music.musichallSong.PlayLyricInfo',
       'GetPlayLyricInfo',
-      expect.objectContaining({ songID: 123, qrc: 0 }),
+      expect.objectContaining({ songID: 123, qrc: 0, trans: 1 }),
       expect.any(Object)
     )
   })
 
   test('lyric_new 请求 qrc=1 并提取 LyricContent', async () => {
     const request = jest.fn().mockResolvedValue({
-      body: { lyric: QRC_FIXTURE, qrc: 1, qrc_t: 34 }
+      body: {
+        lyric: QRC_FIXTURE,
+        trans: Buffer.from('[00:01.00]翻译').toString('base64'),
+        qrc: 1,
+        qrc_t: 34,
+        trans_t: 35
+      }
     })
 
     await expect(lyricNew({ id: 123 }, request)).resolves.toEqual({
-      yrc: { version: 34, lyric: '[0,1000]你(0,1000)' }
+      yrc: { version: 34, lyric: '[0,1000]你(0,1000)' },
+      tlyric: { version: 35, lyric: '[00:01.00]翻译' }
     })
     expect(request).toHaveBeenCalledWith(
       'music.musichallSong.PlayLyricInfo',
       'GetPlayLyricInfo',
-      expect.objectContaining({ songID: 123, qrc: 1 }),
+      expect.objectContaining({ songID: 123, qrc: 1, trans: 1 }),
       expect.any(Object)
     )
   })

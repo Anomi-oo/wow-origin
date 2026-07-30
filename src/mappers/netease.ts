@@ -32,7 +32,9 @@ export function mapLyrics(lyrics: any = {}): Lyrics {
 export function mapTrackLyrics(lineLyrics: any = {}, wordLyrics: any = {}): TrackLyrics {
   return makeTrackLyrics(
     lineLyrics.lrc?.lyric,
-    stripNeteaseWordLyricMetadata(wordLyrics.yrc?.lyric)
+    stripNeteaseWordLyricMetadata(wordLyrics.yrc?.lyric),
+    lineLyrics.tlyric?.lyric || wordLyrics.tlyric?.lyric,
+    wordLyrics.ytlrc?.lyric
   );
 }
 

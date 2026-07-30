@@ -30,7 +30,12 @@ export function mapLyrics(lyrics: any = {}): Lyrics {
 }
 
 export function mapTrackLyrics(lineLyrics: any = {}, wordLyrics: any = {}): TrackLyrics {
-  return makeTrackLyrics(lineLyrics.lrc?.lyric, wordLyrics.yrc?.lyric);
+  return makeTrackLyrics(
+    lineLyrics.lrc?.lyric,
+    wordLyrics.yrc?.lyric,
+    lineLyrics.tlyric?.lyric || wordLyrics.tlyric?.lyric,
+    wordLyrics.ytlrc?.lyric
+  );
 }
 
 export function mapTrackUrl(audio: any = {}): TrackUrl {

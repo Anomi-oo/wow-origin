@@ -1,11 +1,16 @@
 import type { TrackLyrics } from 'aduoer-wow-sdk';
 
-export function makeTrackLyrics(lyric: unknown, wordLyric: unknown): TrackLyrics {
+export function makeTrackLyrics(
+  lyric: unknown,
+  wordLyric: unknown,
+  translateLyric: unknown = '',
+  translateWordLyric: unknown = ''
+): TrackLyrics {
   return {
     lyric: typeof lyric === 'string' ? lyric : '',
     wordLyric: typeof wordLyric === 'string' ? wordLyric : '',
-    translateLyric: '',
-    translateWordLyric: ''
+    translateLyric: typeof translateLyric === 'string' ? translateLyric : '',
+    translateWordLyric: typeof translateWordLyric === 'string' ? translateWordLyric : ''
   };
 }
 
