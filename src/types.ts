@@ -8,7 +8,7 @@ export interface Lyrics {
   original: string;
   translation: string;
   romanized: string;
-  wordLyric?: string;
+  wordLyrics?: string;
 }
 
 export function notSupported(platform: MusicPlatform, feature: string): never {

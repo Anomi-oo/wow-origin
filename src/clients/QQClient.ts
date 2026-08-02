@@ -181,7 +181,7 @@ export class QQClient extends MusicClientBase {
     return mapTrackUrl(resolvedAudio);
   }
 
-  async getTrackLyric(id: string): Promise<TrackLyrics> {
+  async getTrackLyrics(id: string): Promise<TrackLyrics> {
     const lineLyricsPromise = this.call('lyric', { mid: id }).catch(() => ({}));
     const wordLyricsPromise = this.call('lyric_new', { mid: id }).catch(() => ({}));
     const [lineLyrics, wordLyrics] = await Promise.all([lineLyricsPromise, wordLyricsPromise]);
@@ -190,12 +190,12 @@ export class QQClient extends MusicClientBase {
 
   async getTrackLineLyric(id: string): Promise<string> {
     const lineLyrics = await this.call('lyric', { mid: id });
-    return mapTrackLyrics(lineLyrics).lyric;
+    return mapTrackLyrics(lineLyrics).lyrics;
   }
 
   async getTrackWordLyric(id: string): Promise<string> {
     const wordLyrics = await this.call('lyric_new', { mid: id });
-    return mapTrackLyrics({}, wordLyrics).wordLyric;
+    return mapTrackLyrics({}, wordLyrics).wordLyrics;
   }
 
   async searchSuggest(keyword: string): Promise<SearchSuggest> {

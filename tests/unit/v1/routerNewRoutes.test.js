@@ -40,11 +40,10 @@ function createService(overrides = {}) {
       bitrate: 1000000,
       size: 123456
     }),
-    getTrackLyric: jest.fn().mockResolvedValue({
-      lyric: '[00:01.00]逐行歌词',
-      wordLyric: '[1000,1000]逐(1000,500)字(1500,500)',
-      translateLyric: '',
-      translateWordLyric: ''
+    getTrackLyrics: jest.fn().mockResolvedValue({
+      lyrics: '[00:01.00]逐行歌词',
+      wordLyrics: '[1000,1000]逐(1000,500)字(1500,500)',
+      translatedLyrics: ''
     }),
     ...overrides
   }
@@ -176,11 +175,11 @@ describe('v1 新增路由', () => {
       .get('/v1/track/url?id=track-1&quality=lossless')
       .expect(200)
     const lyricResponse = await request(app)
-      .get('/v1/track/lyric?id=track-1')
+      .get('/v1/track/lyrics?id=track-1')
       .expect(200)
 
     expect(service.getTrackUrl).toHaveBeenCalledWith('track-1', 'lossless')
-    expect(service.getTrackLyric).toHaveBeenCalledWith('track-1')
+    expect(service.getTrackLyrics).toHaveBeenCalledWith('track-1')
     expect(audioResponse.body.data).toEqual({
       url: 'https://audio.test/song.flac',
       quality: 'lossless',
@@ -189,10 +188,9 @@ describe('v1 新增路由', () => {
       size: 123456
     })
     expect(lyricResponse.body.data).toEqual({
-      lyric: '[00:01.00]逐行歌词',
-      wordLyric: '[1000,1000]逐(1000,500)字(1500,500)',
-      translateLyric: '',
-      translateWordLyric: ''
+      lyrics: '[00:01.00]逐行歌词',
+      wordLyrics: '[1000,1000]逐(1000,500)字(1500,500)',
+      translatedLyrics: ''
     })
   })
 
@@ -201,9 +199,19 @@ describe('v1 新增路由', () => {
     const app = createApp(service)
 
     await request(app).get('/v1/track/url').expect(400)
-    await request(app).get('/v1/track/lyric').expect(400)
+    await request(app).get('/v1/track/lyrics').expect(400)
     expect(service.getTrackUrl).not.toHaveBeenCalled()
-    expect(service.getTrackLyric).not.toHaveBeenCalled()
+    expect(service.getTrackLyrics).not.toHaveBeenCalled()
+  })
+
+  test('旧歌词地址永久重定向到新地址', async () => {
+    const service = createService()
+    const response = await request(createApp(service))
+      .get('/v1/track/lyric?id=track-1')
+      .expect(308)
+
+    expect(response.headers.location).toBe('/v1/track/lyrics?id=track-1')
+    expect(service.getTrackLyrics).not.toHaveBeenCalled()
   })
 
   test('歌单写操作路由使用 JSON body 参数', async () => {

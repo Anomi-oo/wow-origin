@@ -163,7 +163,7 @@ export class NeteaseClient extends MusicClientBase {
     return mapTrackUrl(resolvedAudio);
   }
 
-  async getTrackLyric(id: string): Promise<TrackLyrics> {
+  async getTrackLyrics(id: string): Promise<TrackLyrics> {
     const lineLyricsPromise = this.call('lyric', { id }).catch(() => ({}));
     const wordLyricsPromise = this.call('lyric_new', { id }).catch(() => ({}));
     const [lineLyrics, wordLyrics] = await Promise.all([lineLyricsPromise, wordLyricsPromise]);
@@ -172,12 +172,12 @@ export class NeteaseClient extends MusicClientBase {
 
   async getTrackLineLyric(id: string): Promise<string> {
     const lineLyrics = await this.call('lyric', { id });
-    return mapTrackLyrics(lineLyrics).lyric;
+    return mapTrackLyrics(lineLyrics).lyrics;
   }
 
   async getTrackWordLyric(id: string): Promise<string> {
     const wordLyrics = await this.call('lyric_new', { id });
-    return mapTrackLyrics({}, wordLyrics).wordLyric;
+    return mapTrackLyrics({}, wordLyrics).wordLyrics;
   }
 
   async searchSuggest(keyword: string): Promise<SearchSuggest> {

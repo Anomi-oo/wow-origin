@@ -94,7 +94,7 @@ describe('QQClient', () => {
     expect(callModule).not.toHaveBeenCalledWith('lyric/new', expect.anything())
   })
 
-  test('getTrackLyric 并发聚合逐行与逐字歌词', async () => {
+  test('getTrackLyrics 并发聚合逐行与逐字歌词', async () => {
     let releaseLineLyrics
     let releaseWordLyrics
     const lineLyrics = new Promise((resolve) => { releaseLineLyrics = resolve })
@@ -107,7 +107,7 @@ describe('QQClient', () => {
     global.__musicPlatformFactory__.getPlatform.mockReturnValue({ callModule })
 
     const client = new QQClient('uin=o123; qm_keyst=key')
-    const resultPromise = client.getTrackLyric('mid')
+    const resultPromise = client.getTrackLyrics('mid')
     await Promise.resolve()
     expect(callModule).toHaveBeenCalledWith('lyric', expect.any(Object))
     expect(callModule).toHaveBeenCalledWith('lyric/new', expect.any(Object))
@@ -119,14 +119,13 @@ describe('QQClient', () => {
     releaseWordLyrics({ code: 200, yrc: { lyric: '[0,1000]歌(0,500)词(500,500)' } })
 
     await expect(resultPromise).resolves.toEqual({
-      lyric: '逐行歌词',
-      wordLyric: '[0,1000]歌(0,500)词(500,500)',
-      translateLyric: '逐行翻译',
-      translateWordLyric: ''
+      lyrics: '逐行歌词',
+      wordLyrics: '[0,1000]歌(0,500)词(500,500)',
+      translatedLyrics: '逐行翻译'
     })
   })
 
-  test('逐字歌词请求失败时 getTrackLyric 仍返回逐行歌词', async () => {
+  test('逐字歌词请求失败时 getTrackLyrics 仍返回逐行歌词', async () => {
     const callModule = jest.fn((route) => {
       if (route === 'lyric') return Promise.resolve({ code: 200, lrc: { lyric: '逐行歌词' } })
       if (route === 'lyric/new') return Promise.reject(new Error('QRC unavailable'))
@@ -135,9 +134,9 @@ describe('QQClient', () => {
     global.__musicPlatformFactory__.getPlatform.mockReturnValue({ callModule })
 
     const client = new QQClient('uin=o123; qm_keyst=key')
-    await expect(client.getTrackLyric('mid')).resolves.toMatchObject({
-      lyric: '逐行歌词',
-      wordLyric: ''
+    await expect(client.getTrackLyrics('mid')).resolves.toMatchObject({
+      lyrics: '逐行歌词',
+      wordLyrics: ''
     })
   })
 

@@ -62,7 +62,7 @@ describe('NeteaseClient', () => {
     expect(callModule).not.toHaveBeenCalledWith('lyric/new', expect.anything())
   })
 
-  test('getTrackLyric 返回逐行与逐字歌词', async () => {
+  test('getTrackLyrics 返回逐行与逐字歌词', async () => {
     const callModule = jest.fn((route) => {
       if (route === 'lyric') {
         return Promise.resolve({
@@ -83,11 +83,10 @@ describe('NeteaseClient', () => {
     global.__musicPlatformFactory__.getPlatform.mockReturnValue({ callModule })
 
     const client = new NeteaseClient('MUSIC_U=music-u')
-    await expect(client.getTrackLyric('33418857')).resolves.toEqual({
-      lyric: '逐行歌词',
-      wordLyric: '[0,1000](0,500,0)歌(500,500,0)词',
-      translateLyric: '逐行翻译',
-      translateWordLyric: '[0,1000](0,1000,0)翻译'
+    await expect(client.getTrackLyrics('33418857')).resolves.toEqual({
+      lyrics: '逐行歌词',
+      wordLyrics: '[0,1000](0,500,0)歌(500,500,0)词',
+      translatedLyrics: '逐行翻译'
     })
   })
 

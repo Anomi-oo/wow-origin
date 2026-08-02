@@ -42,15 +42,14 @@ describe('v1 mappers', () => {
     })
   })
 
-  test('播放歌词使用四字段结构并清理网易 JSON 元数据', () => {
+  test('播放歌词使用三字段结构并清理网易 JSON 元数据', () => {
     expect(qqMappers.mapTrackLyrics(
       { lrc: { lyric: 'QQ 逐行' }, tlyric: { lyric: 'QQ 翻译' } },
       { yrc: { lyric: '[0,1000]Q(0,500)Q(500,500)' } }
     )).toEqual({
-      lyric: 'QQ 逐行',
-      wordLyric: '[0,1000]Q(0,500)Q(500,500)',
-      translateLyric: 'QQ 翻译',
-      translateWordLyric: ''
+      lyrics: 'QQ 逐行',
+      wordLyrics: '[0,1000]Q(0,500)Q(500,500)',
+      translatedLyrics: 'QQ 翻译'
     })
 
     expect(neteaseMappers.mapTrackLyrics(
@@ -60,10 +59,9 @@ describe('v1 mappers', () => {
         ytlrc: { lyric: '[0,1000](0,1000,0)译' }
       }
     )).toEqual({
-      lyric: '网易逐行',
-      wordLyric: '[0,1000](0,1000,0)歌',
-      translateLyric: '网易翻译',
-      translateWordLyric: '[0,1000](0,1000,0)译'
+      lyrics: '网易逐行',
+      wordLyrics: '[0,1000](0,1000,0)歌',
+      translatedLyrics: '网易翻译'
     })
   })
 

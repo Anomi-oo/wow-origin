@@ -33,8 +33,7 @@ export function mapTrackLyrics(lineLyrics: any = {}, wordLyrics: any = {}): Trac
   return makeTrackLyrics(
     lineLyrics.lrc?.lyric,
     wordLyrics.yrc?.lyric,
-    lineLyrics.tlyric?.lyric || wordLyrics.tlyric?.lyric,
-    wordLyrics.ytlrc?.lyric
+    lineLyrics.tlyric?.lyric || wordLyrics.tlyric?.lyric
   );
 }
 

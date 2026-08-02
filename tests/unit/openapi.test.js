@@ -41,7 +41,9 @@ describe('OpenAPI documentation', () => {
     expect(response.body.paths).toHaveProperty('/v1/track/fm')
     expect(response.body.paths).not.toHaveProperty('/v1/track/personal-fm')
     expect(response.body.paths).toHaveProperty('/v1/track/url')
+    expect(response.body.paths).toHaveProperty('/v1/track/lyrics')
     expect(response.body.paths).toHaveProperty('/v1/track/lyric')
+    expect(response.body.paths['/v1/track/lyric'].get.deprecated).toBe(true)
     expect(response.body.paths).toHaveProperty('/v1/artist/detail')
     expect(response.body.paths).toHaveProperty('/v1/album/detail')
     expect(response.body.paths).toHaveProperty('/v1/search/tracks')
@@ -72,14 +74,13 @@ describe('OpenAPI documentation', () => {
     expect(response.body.components.schemas).not.toHaveProperty('MetadataMatchRequest')
     expect(response.body.components.schemas.ToplistTrackSummary.required).toEqual(['name', 'artistName'])
     expect(response.body.components.schemas.TrackLyrics.required).toEqual([
-      'lyric',
-      'wordLyric',
-      'translateLyric',
-      'translateWordLyric'
+      'lyrics',
+      'wordLyrics',
+      'translatedLyrics'
     ])
     expect(response.body.paths['/v1/track/url'].get.responses['200'].content['application/json'].schema.allOf[1].properties.data.$ref)
       .toBe('#/components/schemas/TrackUrl')
-    expect(response.body.paths['/v1/track/lyric'].get.responses['200'].content['application/json'].schema.allOf[1].properties.data.$ref)
+    expect(response.body.paths['/v1/track/lyrics'].get.responses['200'].content['application/json'].schema.allOf[1].properties.data.$ref)
       .toBe('#/components/schemas/TrackLyrics')
     expect(response.body.paths['/v1/track/favorite'].post.parameters).toEqual([])
     expect(response.body.paths['/v1/track/favorite'].post.requestBody.content['application/json'].schema.properties.status.type).toBe('boolean')

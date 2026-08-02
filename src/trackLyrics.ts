@@ -1,16 +1,14 @@
 import type { TrackLyrics } from 'aduoer-wow-sdk';
 
 export function makeTrackLyrics(
-  lyric: unknown,
-  wordLyric: unknown,
-  translateLyric: unknown = '',
-  translateWordLyric: unknown = ''
+  lyrics: unknown,
+  wordLyrics: unknown,
+  translatedLyrics: unknown = ''
 ): TrackLyrics {
   return {
-    lyric: typeof lyric === 'string' ? lyric : '',
-    wordLyric: typeof wordLyric === 'string' ? wordLyric : '',
-    translateLyric: typeof translateLyric === 'string' ? translateLyric : '',
-    translateWordLyric: typeof translateWordLyric === 'string' ? translateWordLyric : ''
+    lyrics: typeof lyrics === 'string' ? lyrics : '',
+    wordLyrics: typeof wordLyrics === 'string' ? wordLyrics : '',
+    translatedLyrics: typeof translatedLyrics === 'string' ? translatedLyrics : ''
   };
 }
 

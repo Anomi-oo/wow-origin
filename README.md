@@ -152,7 +152,7 @@ curl -H "Authorization: Bearer your_api_access_key" \
 
 # 获取歌词
 curl -H "Authorization: Bearer your_api_access_key" \
-  "http://localhost:3000/v1/track/lyric?id=0039MnYb0qxYhV"
+  "http://localhost:3000/v1/track/lyrics?id=0039MnYb0qxYhV"
 ```
 
 成功响应格式为 `{ "code": 200, "data": ... }`；错误响应格式为 `{ "code": <HTTP 状态码>, "message": "...", "data": null }`。认证失败返回 `401`。
