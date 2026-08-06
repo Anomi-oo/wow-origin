@@ -1,9 +1,9 @@
 services:
   aduoer-wow:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: aduoer-wow:local
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+    image: anomioo/wow-origin:latest
     container_name: aduoer-wow
     ports:
       - "${HOST_PORT:-3000}:${PORT:-3000}"

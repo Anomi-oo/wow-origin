@@ -73,20 +73,18 @@ openssl rand -hex 32
 
 缺失、为空或重复的 `api_access_key` 会导致对应账号被忽略。`stateless` 和 `needUnlock` 必须使用 JSON 布尔值。
 
-### 2. 使用 Dockerfile 构建并运行
+### 2. 使用 Docker 运行
 
 在项目目录执行：
 
 ```bash
-docker build -t aduoer-wow:local -f Dockerfile .
-
 docker run -d \
   --name aduoer-wow \
   -p 3000:3000 \
   --env-file .env \
   -v "$(pwd)/data:/app/data" \
   --restart unless-stopped \
-  aduoer-wow:local
+  anomioo/wow-origin:latest
 ```
 
 查看运行日志：
@@ -95,22 +93,12 @@ docker run -d \
 docker logs -f aduoer-wow
 ```
 
-更新代码后，重新构建并替换容器：
-
-```bash
-docker stop aduoer-wow
-docker rm aduoer-wow
-docker build -t aduoer-wow:local -f Dockerfile .
-```
-
-然后再次执行上面的 `docker run` 命令。
-
 ### 使用 Docker Compose
 
 `docker-compose.yml` 同样通过当前目录的 `Dockerfile` 构建，不会拉取远程项目镜像：
 
 ```bash
-docker compose up -d --build
+docker compose up -d
 ```
 
 常用命令：
