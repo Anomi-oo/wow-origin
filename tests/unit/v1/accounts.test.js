@@ -72,36 +72,36 @@ describe('v1 accounts', () => {
     expect(registry.sessions).toHaveLength(1)
     expect(registry.byAccessKey.get('key-ok').name).toBe('ok')
     expect(registry.byAccessKey.get('key-ok').stateless).toBe(true)
-    expect(registry.byAccessKey.get('key-ok').needUnlock).toBe(true)
+    expect(registry.byAccessKey.get('key-ok').useLuoxue).toBe(true)
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('api_access_key 未填写或为空'))
   })
 
-  test('解析 needUnlock，缺失时默认启用', () => {
+  test('解析 useLuoxue，缺失时默认启用', () => {
     const workDir = makeWorkDir()
     fs.writeFileSync(path.join(workDir, 'data', 'accounts.json'), JSON.stringify([
       { platform: 'qq', name: 'default', cookie: '', api_access_key: 'key-default' },
-      { platform: 'qq', name: 'enabled', cookie: '', api_access_key: 'key-enabled', needUnlock: true },
-      { platform: 'netease', name: 'disabled', cookie: '', api_access_key: 'key-disabled', needUnlock: false }
+      { platform: 'qq', name: 'enabled', cookie: '', api_access_key: 'key-enabled', useLuoxue: true },
+      { platform: 'netease', name: 'disabled', cookie: '', api_access_key: 'key-disabled', useLuoxue: false }
     ]))
 
     const registry = loadAccountSessions(workDir)
 
-    expect(registry.byAccessKey.get('key-default').needUnlock).toBe(true)
-    expect(registry.byAccessKey.get('key-enabled').needUnlock).toBe(true)
-    expect(registry.byAccessKey.get('key-disabled').needUnlock).toBe(false)
+    expect(registry.byAccessKey.get('key-default').useLuoxue).toBe(true)
+    expect(registry.byAccessKey.get('key-enabled').useLuoxue).toBe(true)
+    expect(registry.byAccessKey.get('key-disabled').useLuoxue).toBe(false)
   })
 
-  test('needUnlock 非 boolean 时保留账号、打印警告并按 false 处理', () => {
+  test('useLuoxue 非 boolean 时保留账号、打印警告并按 false 处理', () => {
     const workDir = makeWorkDir()
     fs.writeFileSync(path.join(workDir, 'data', 'accounts.json'), JSON.stringify([
-      { platform: 'qq', name: 'invalid', cookie: 'cookie', api_access_key: 'key-1', needUnlock: 'false' }
+      { platform: 'qq', name: 'invalid', cookie: 'cookie', api_access_key: 'key-1', useLuoxue: 'false' }
     ]))
 
     const registry = loadAccountSessions(workDir)
 
     expect(registry.sessions).toHaveLength(1)
-    expect(registry.byAccessKey.get('key-1').needUnlock).toBe(false)
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('needUnlock 必须是 boolean'))
+    expect(registry.byAccessKey.get('key-1').useLuoxue).toBe(false)
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('useLuoxue 必须是 boolean'))
   })
 
   test('重复 api_access_key 的账号都不注册', () => {
@@ -123,7 +123,7 @@ describe('v1 accounts', () => {
     const workDir = makeWorkDir()
     const accountsPath = path.join(workDir, 'data', 'accounts.json')
     fs.writeFileSync(accountsPath, JSON.stringify([
-      { platform: 'qq', name: 'qq1', cookie: 'old', api_access_key: 'key-1', stateless: false, needUnlock: false },
+      { platform: 'qq', name: 'qq1', cookie: 'old', api_access_key: 'key-1', stateless: false, useLuoxue: false },
       { platform: 'netease', name: 'netease1', cookie: 'old2', api_access_key: 'key-2' }
     ]))
     const registry = loadAccountSessions(workDir)
@@ -142,7 +142,7 @@ describe('v1 accounts', () => {
     expect(result.session.platform).toBe('netease')
     expect(result.session.name).toBe('新昵称')
     expect(result.session.stateless).toBe(false)
-    expect(result.session.needUnlock).toBe(false)
+    expect(result.session.useLuoxue).toBe(false)
     expect(registry.byAccessKey.get('key-1').cookie).toBe('MUSIC_U=new_cookie')
     expect(registry.byAccessKey.get('key-1').name).toBe('新昵称')
     expect(saved[0]).toMatchObject({
@@ -151,7 +151,7 @@ describe('v1 accounts', () => {
       cookie: 'MUSIC_U=new_cookie',
       api_access_key: 'key-1',
       stateless: false,
-      needUnlock: false
+      useLuoxue: false
     })
     expect(saved[1].cookie).toBe('old2')
   })
@@ -194,7 +194,7 @@ describe('v1 accounts', () => {
       cookie: 'MUSIC_U=new_cookie',
       apiAccessKey: 'newkey',
       stateless: false,
-      needUnlock: true
+      useLuoxue: true
     })
     expect(saved).toHaveLength(2)
     expect(saved[1]).toMatchObject({
@@ -203,7 +203,7 @@ describe('v1 accounts', () => {
       cookie: 'MUSIC_U=new_cookie',
       api_access_key: 'newkey',
       stateless: false,
-      needUnlock: true
+      useLuoxue: true
     })
     expect(registry.byAccessKey.get('newkey').name).toBe('网易昵称')
   })

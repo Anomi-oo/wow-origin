@@ -64,7 +64,7 @@ describe('Wow adapter', () => {
       name: '网易云',
       cookie: 'MUSIC_U=value',
       apiAccessKey: 'token-1',
-      needUnlock: true,
+      useLuoxue: true,
       favoriteTrackIds: new Set()
     }, lxResolver)
 
@@ -91,7 +91,7 @@ describe('Wow adapter', () => {
       name: 'QQ',
       cookie: 'uin=1; qm_keyst=value',
       apiAccessKey: 'token-1',
-      needUnlock: true,
+      useLuoxue: true,
       favoriteTrackIds: new Set()
     }, lxResolver)
 
@@ -122,7 +122,7 @@ describe('Wow adapter', () => {
       name: 'QQ',
       cookie: 'uin=1; qm_keyst=value',
       apiAccessKey: 'token-1',
-      needUnlock: true,
+      useLuoxue: true,
       favoriteTrackIds: new Set()
     }, lxResolver)
 
@@ -141,7 +141,7 @@ describe('Wow adapter', () => {
       name: 'QQ',
       cookie: 'uin=1; qm_keyst=value',
       apiAccessKey: 'token-1',
-      needUnlock: true,
+      useLuoxue: true,
       favoriteTrackIds: new Set()
     }, lxResolver)
 
@@ -190,7 +190,7 @@ describe('Wow adapter', () => {
       name: 'QQ',
       cookie: '',
       apiAccessKey: 'token-1',
-      needUnlock: true,
+      useLuoxue: true,
       favoriteTrackIds: new Set()
     }, lxResolver)
 
@@ -200,7 +200,7 @@ describe('Wow adapter', () => {
   test.each([
     ['无 cookie', ''],
     ['有 cookie', 'MUSIC_U=value']
-  ])('needUnlock 为 false 时%s都不调用洛雪源', async (_label, cookie) => {
+  ])('useLuoxue 为 false 时%s都不调用洛雪源', async (_label, cookie) => {
     const officialTrackUrl = {
       url: 'https://official.test/song.mp3',
       quality: 'standard',
@@ -217,7 +217,7 @@ describe('Wow adapter', () => {
       name: '网易云',
       cookie,
       apiAccessKey: 'token-1',
-      needUnlock: false,
+      useLuoxue: false,
       favoriteTrackIds: new Set()
     }, lxResolver)
 

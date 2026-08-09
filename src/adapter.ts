@@ -32,7 +32,7 @@ export function createAdapter(
   lxTrackUrlResolver?: LxTrackUrlResolver
 ): WowAdapter {
   const client = createMusicClient(account.platform, account.cookie, account.favoriteTrackIds);
-  if (account.needUnlock === false || !lxTrackUrlResolver) return client;
+  if (account.useLuoxue === false || !lxTrackUrlResolver) return client;
 
   const defaultGetTrackUrl = client.getTrackUrl.bind(client);
   const getLxTrackUrl = async (id: string, quality?: string): Promise<TrackUrl | undefined> => {

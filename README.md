@@ -47,7 +47,7 @@ openssl rand -hex 32
     "cookie": "",
     "api_access_key": "替换为随机生成的访问密钥",
     "stateless": false,
-    "needUnlock": true
+    "useLuoxue": true
   },
   {
     "platform": "netease",
@@ -55,7 +55,7 @@ openssl rand -hex 32
     "cookie": "",
     "api_access_key": "替换为另一个随机访问密钥",
     "stateless": false,
-    "needUnlock": true
+    "useLuoxue": true
   }
 ]
 ```
@@ -69,9 +69,9 @@ openssl rand -hex 32
 | `cookie` | 平台 Cookie；可留空后通过扫码登录写入 |
 | `api_access_key` | `/v1/*` 接口的访问令牌，必填且必须唯一 |
 | `stateless` | 是否以无状态方式使用账号 |
-| `needUnlock` | 是否允许使用洛雪自定义源解析播放地址 |
+| `useLuoxue` | 是否允许使用洛雪自定义源解析播放地址 |
 
-缺失、为空或重复的 `api_access_key` 会导致对应账号被忽略。`stateless` 和 `needUnlock` 必须使用 JSON 布尔值。
+缺失、为空或重复的 `api_access_key` 会导致对应账号被忽略。`stateless` 和 `useLuoxue` 必须使用 JSON 布尔值。
 
 ### 2. 使用 Docker 运行
 

@@ -5,7 +5,7 @@
     "cookie": "",
     "api_access_key": "CHANGE_ME_TO_A_UNIQUE_RANDOM_KEY",
     "stateless": false,
-    "needUnlock": true
+    "useLuoxue": true
   },
   {
     "platform": "netease",
@@ -13,6 +13,6 @@
     "cookie": "",
     "api_access_key": "CHANGE_ME_TO_ANOTHER_UNIQUE_RANDOM_KEY",
     "stateless": false,
-    "needUnlock": true
+    "useLuoxue": true
   }
 ]

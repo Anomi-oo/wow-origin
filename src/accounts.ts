@@ -9,7 +9,7 @@ export interface RawMusicAccount {
   cookie?: unknown;
   api_access_key?: unknown;
   stateless?: unknown;
-  needUnlock?: unknown;
+  useLuoxue?: unknown;
 }
 
 export interface MusicAccountSession {
@@ -18,7 +18,7 @@ export interface MusicAccountSession {
   cookie: string;
   apiAccessKey: string;
   stateless: boolean;
-  needUnlock: boolean;
+  useLuoxue: boolean;
   favoriteTrackIds: Set<string>;
 }
 
@@ -44,7 +44,7 @@ export const sessionsTemplate: RawMusicAccount[] = [
     cookie: '',
     api_access_key: '',
     stateless: false,
-    needUnlock: true
+    useLuoxue: true
   },
   {
     platform: 'qq',
@@ -52,7 +52,7 @@ export const sessionsTemplate: RawMusicAccount[] = [
     cookie: '',
     api_access_key: '',
     stateless: false,
-    needUnlock: true
+    useLuoxue: true
   },
   {
     platform: 'netease',
@@ -60,7 +60,7 @@ export const sessionsTemplate: RawMusicAccount[] = [
     cookie: '',
     api_access_key: '',
     stateless: false,
-    needUnlock: true
+    useLuoxue: true
   }
 ];
 
@@ -80,7 +80,7 @@ function normalizeAccountStateless(value: unknown): boolean {
   return value;
 }
 
-function normalizeAccountNeedUnlock(value: unknown): { value: boolean; invalid: boolean } {
+function normalizeAccountUseLuoxue(value: unknown): { value: boolean; invalid: boolean } {
   if (value === undefined) return { value: true, invalid: false };
   if (typeof value === 'boolean') return { value, invalid: false };
   return { value: false, invalid: true };
@@ -217,10 +217,10 @@ export function loadAccountSessions(workDir: string = process.cwd()): AccountSes
     try {
       const platform = normalizeAccountPlatform(account.platform);
       const stateless = normalizeAccountStateless(account.stateless);
-      const needUnlock = normalizeAccountNeedUnlock(account.needUnlock);
-      if (needUnlock.invalid) {
+      const useLuoxue = normalizeAccountUseLuoxue(account.useLuoxue);
+      if (useLuoxue.invalid) {
         console.warn(
-          `[accounts] 账号 "${String(account.name || `${platform}-${index + 1}`).trim()}" 的 needUnlock 必须是 boolean，已按 false 处理`
+          `[accounts] 账号 "${String(account.name || `${platform}-${index + 1}`).trim()}" 的 useLuoxue 必须是 boolean，已按 false 处理`
         );
       }
       parsedSessions.push({
@@ -229,7 +229,7 @@ export function loadAccountSessions(workDir: string = process.cwd()): AccountSes
         cookie: String(account.cookie || ''),
         apiAccessKey,
         stateless,
-        needUnlock: needUnlock.value,
+        useLuoxue: useLuoxue.value,
         favoriteTrackIds: new Set<string>()
       });
       keyCounts.set(apiAccessKey, (keyCounts.get(apiAccessKey) || 0) + 1);
@@ -353,7 +353,7 @@ export function createAccountWithCookie(
     cookie: normalizedCookie,
     api_access_key: token,
     stateless: false,
-    needUnlock: true
+    useLuoxue: true
   };
   rawAccounts.push(account);
   writeRawAccounts(filePath, rawAccounts);
@@ -364,7 +364,7 @@ export function createAccountWithCookie(
     cookie: normalizedCookie,
     apiAccessKey: token,
     stateless: false,
-    needUnlock: true,
+    useLuoxue: true,
     favoriteTrackIds: new Set<string>()
   };
   registry.sessions.push(session);
