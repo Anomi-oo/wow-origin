@@ -203,7 +203,6 @@ export function mapUserDetail(raw: any): UserProfile {
     userId: String(profile.userId || profile.uid || raw.userId || ''),
     nickname: profile.nickname || profile.nickName || raw.nickname || '',
     avatar: profile.avatarUrl || profile.avatar || raw.avatarUrl || '',
-    isVip: Boolean(profile.vipType || profile.isVip || raw.vipType || false),
     platform: SOURCE_PREFIX
   };
 }
