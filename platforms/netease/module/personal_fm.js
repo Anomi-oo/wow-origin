@@ -1,4 +1,4 @@
-// 私人FM
+// 歌曲漫游使用的上游接口
 
 module.exports = (query, request) => {
   return request(`/api/v1/radio/get`, {}, {

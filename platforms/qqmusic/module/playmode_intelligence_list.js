@@ -13,11 +13,11 @@ module.exports = (query, request) => {
     uin: query.uin || 0,
     qm_keyst: query.qm_keyst || ''
   }).then(res => {
-    return formatpersonalFm(res.body.VecSongs)
+    return formatTrackRoam(res.body.VecSongs)
   })
 }
 
-function formatpersonalFm(VecSongs) {
+function formatTrackRoam(VecSongs) {
   return {
     data: VecSongs.map(song => ({
       id: song.Track.id,

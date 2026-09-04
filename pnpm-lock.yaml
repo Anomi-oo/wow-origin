@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       aduoer-wow-sdk:
-        specifier: ^0.1.4
-        version: 0.1.4(supports-color@8.1.1)
+        specifier: ^0.2.0
+        version: 0.2.0(supports-color@8.1.1)
       axios:
         specifier: ^1.18.1
         version: 1.19.0(debug@4.4.3(supports-color@8.1.1))(supports-color@8.1.1)
@@ -618,8 +618,8 @@ packages:
     engines: {node: '>=0.4.0'}
     hasBin: true
 
-  aduoer-wow-sdk@0.1.4:
-    resolution: {integrity: sha512-VeCYIHGb9hAjO6O7GH/eHlzUSNGo26KltC1mCpIO8wVTQrZkhMR4Aol2eLxdJtUBw7XpnyMqOXKYuORKgETvTA==}
+  aduoer-wow-sdk@0.2.0:
+    resolution: {integrity: sha512-abUGul1vcjq/dsUJnjTZPpupY93ZXeCLJxGHThwil5WyAW4Kjffg4snV4FyMhVE1dBTTybShk9prya3BtieOPA==}
     engines: {node: '>=22'}
 
   agent-base@6.0.2:
@@ -2603,7 +2603,7 @@ snapshots:
 
   acorn@8.18.0: {}
 
-  aduoer-wow-sdk@0.1.4(supports-color@8.1.1):
+  aduoer-wow-sdk@0.2.0(supports-color@8.1.1):
     dependencies:
       '@sinclair/typebox': 0.34.52
       express: 5.2.1(supports-color@8.1.1)

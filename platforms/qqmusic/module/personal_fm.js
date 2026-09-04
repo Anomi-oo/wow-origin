@@ -1,4 +1,4 @@
-//私人FM
+// 歌曲漫游使用的上游接口
 
 module.exports = (query, request) => {
 
@@ -17,12 +17,11 @@ module.exports = (query, request) => {
     uin: query.uin,
     qm_keyst: query.qm_keyst
   }).then(res => {
-    // console.log('personalFm res', JSON.stringify(res, null, 2))
-    return formatpersonalFm(res.body)
+    return formatTrackRoam(res.body)
   })
 }
 
-function formatpersonalFm(data) {
+function formatTrackRoam(data) {
   return {
     data: (data.tracks || []).map((song, index) => ({
       id: song.id,

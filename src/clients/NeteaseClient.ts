@@ -98,17 +98,13 @@ export class NeteaseClient extends MusicClientBase {
     return { ...mapPlaylist(playlist), tracks };
   }
 
-  async getDailyFM(): Promise<Track[]> {
-    return this.getPersonalFM();
-  }
-
   async getDailyTracks(): Promise<Track[]> {
     const raw = await this.call('recommend_songs');
     const tracks = this.toArrayPayload(raw, ['dailySongs', 'recommend', 'songs', 'data']);
     return tracks.map((item: any) => this.withFavoriteTrack(mapTrack(item)));
   }
 
-  async getPersonalFM(): Promise<Track[]> {
+  async getTrackRoam(): Promise<Track[]> {
     const raw = await this.call('personal_fm');
     const tracks = this.toArrayPayload(raw, ['tracks', 'songs', 'data']);
     return tracks.map((item: any) => this.withFavoriteTrack(mapTrack(item)));

@@ -126,17 +126,13 @@ export class QQClient extends MusicClientBase {
     return { ...mapPlaylist(playlist), tracks };
   }
 
-  async getDailyFM(): Promise<Track[]> {
-    return this.getPersonalFM();
-  }
-
   async getDailyTracks(): Promise<Track[]> {
     const result = await this.call('recommend_songs');
     const tracks = this.toArrayPayload(result, ['dailySongs', 'tracks', 'songs']);
     return tracks.map((track: any) => this.withFavoriteTrack(mapTrack(track)));
   }
 
-  async getPersonalFM(): Promise<Track[]> {
+  async getTrackRoam(): Promise<Track[]> {
     const result = await this.call('personal_fm');
     const tracks = this.toArrayPayload(result, ['tracks', 'songs', 'data']);
     return tracks.map((track: any) => this.withFavoriteTrack(mapTrack(track)));
