@@ -6,6 +6,8 @@ const {
   extractAuthorizationToken,
   generateAccountAccessKey,
   loadAccountSessions,
+  normalizeAccountLxSources,
+  updateAccountConfigByAccessKey,
   updateAccountCookieByAccessKey
 } = require('../../../dist/accounts')
 
@@ -91,6 +93,36 @@ describe('v1 accounts', () => {
     expect(registry.byAccessKey.get('key-disabled').useLuoxue).toBe(false)
   })
 
+  test('旧账号缺失 lxSource 时兼容为空数组，手工无效地址不会阻止加载', () => {
+    const workDir = makeWorkDir()
+    fs.writeFileSync(path.join(workDir, 'data', 'accounts.json'), JSON.stringify([
+      { platform: 'qq', name: 'legacy', cookie: '', api_access_key: 'legacy-key' },
+      {
+        platform: 'netease', name: 'mixed', cookie: '', api_access_key: 'mixed-key',
+        lxSource: ['https://example.com/a.js', 'file:///tmp/bad.js', 123]
+      }
+    ]))
+
+    const registry = loadAccountSessions(workDir)
+
+    expect(registry.byAccessKey.get('legacy-key').lxSource).toEqual([])
+    expect(registry.byAccessKey.get('mixed-key').lxSource).toEqual(['https://example.com/a.js'])
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('无效的 lxSource'))
+  })
+
+  test('网页 lxSource 校验 HTTP(S) 且最多保留十个唯一地址', () => {
+    expect(normalizeAccountLxSources([
+      ' https://example.com/a.js ',
+      'https://example.com/a.js',
+      '',
+      'http://example.com/b.js'
+    ])).toEqual(['https://example.com/a.js', 'http://example.com/b.js'])
+    expect(() => normalizeAccountLxSources(['file:///tmp/source.js'])).toThrow('地址无效')
+    expect(() => normalizeAccountLxSources(
+      Array.from({ length: 11 }, (_, index) => `https://example.com/${index}.js`)
+    )).toThrow('最多配置 10 个')
+  })
+
   test('useLuoxue 非 boolean 时保留账号、打印警告并按 false 处理', () => {
     const workDir = makeWorkDir()
     fs.writeFileSync(path.join(workDir, 'data', 'accounts.json'), JSON.stringify([
@@ -130,30 +162,61 @@ describe('v1 accounts', () => {
 
     const result = updateAccountCookieByAccessKey(
       'key-1',
-      'netease',
+      'qq',
       'MUSIC_U=new_cookie',
       registry,
-      workDir,
-      '新昵称'
+      workDir
     )
     const saved = JSON.parse(fs.readFileSync(accountsPath, 'utf8'))
 
     expect(result.session.cookie).toBe('MUSIC_U=new_cookie')
-    expect(result.session.platform).toBe('netease')
-    expect(result.session.name).toBe('新昵称')
+    expect(result.session.platform).toBe('qq')
+    expect(result.session.name).toBe('qq1')
     expect(result.session.stateless).toBe(false)
     expect(result.session.useLuoxue).toBe(false)
     expect(registry.byAccessKey.get('key-1').cookie).toBe('MUSIC_U=new_cookie')
-    expect(registry.byAccessKey.get('key-1').name).toBe('新昵称')
+    expect(registry.byAccessKey.get('key-1').name).toBe('qq1')
     expect(saved[0]).toMatchObject({
-      platform: 'netease',
-      name: '新昵称',
+      platform: 'qq',
+      name: 'qq1',
       cookie: 'MUSIC_U=new_cookie',
       api_access_key: 'key-1',
       stateless: false,
       useLuoxue: false
     })
     expect(saved[1].cookie).toBe('old2')
+  })
+
+  test('更新 cookie 时拒绝修改账号平台', () => {
+    const workDir = makeWorkDir()
+    fs.writeFileSync(path.join(workDir, 'data', 'accounts.json'), JSON.stringify([
+      { platform: 'qq', name: 'qq1', cookie: 'old', api_access_key: 'key-1' }
+    ]))
+    const registry = loadAccountSessions(workDir)
+
+    expect(() => updateAccountCookieByAccessKey('key-1', 'netease', 'new', registry, workDir))
+      .toThrow('不能修改平台')
+  })
+
+  test('独立更新账号配置并规范化 lxSource', () => {
+    const workDir = makeWorkDir()
+    const accountsPath = path.join(workDir, 'data', 'accounts.json')
+    fs.writeFileSync(accountsPath, JSON.stringify([
+      { platform: 'qq', name: 'qq1', cookie: 'old', api_access_key: 'key-1' }
+    ]))
+    const registry = loadAccountSessions(workDir)
+
+    const result = updateAccountConfigByAccessKey('key-1', {
+      name: '新名称', stateless: false, useLuoxue: true,
+      lxSource: [' https://example.com/a.js ', '', 'https://example.com/a.js']
+    }, registry, workDir)
+
+    expect(result.session).toMatchObject({
+      platform: 'qq', name: '新名称', cookie: 'old', stateless: false,
+      useLuoxue: true, lxSource: ['https://example.com/a.js']
+    })
+    expect(JSON.parse(fs.readFileSync(accountsPath, 'utf8'))[0].lxSource)
+      .toEqual(['https://example.com/a.js'])
   })
 
   test('生成无短横线 api_access_key', () => {
@@ -206,6 +269,32 @@ describe('v1 accounts', () => {
       useLuoxue: true
     })
     expect(registry.byAccessKey.get('newkey').name).toBe('网易昵称')
+  })
+
+  test('首次扫码时 accounts.json 不存在也会自动创建', () => {
+    const workDir = makeWorkDir()
+    const accountsPath = path.join(workDir, 'data', 'accounts.json')
+    const registry = { sessions: [], byAccessKey: new Map() }
+
+    createAccountWithCookie(
+      'first-key',
+      'qq',
+      'uin=o123; qm_keyst=secret',
+      registry,
+      workDir,
+      '首次扫码账号'
+    )
+
+    expect(fs.existsSync(accountsPath)).toBe(true)
+    expect(JSON.parse(fs.readFileSync(accountsPath, 'utf8'))).toEqual([
+      expect.objectContaining({
+        platform: 'qq',
+        name: '首次扫码账号',
+        api_access_key: 'first-key',
+        lxSource: []
+      })
+    ])
+    expect(registry.byAccessKey.get('first-key').name).toBe('首次扫码账号')
   })
 
   test('忽略 stateless 非 boolean 的账号', () => {

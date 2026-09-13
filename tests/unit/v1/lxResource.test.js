@@ -270,6 +270,69 @@ describe('LX resource', () => {
     }
   })
 
+  test('账号源优先，失败后继续尝试全局源', async () => {
+    const accountUrl = 'https://source.test/account.js'
+    const globalUrl = 'https://source.test/global.js'
+    const cacheDirectory = path.join(temporaryDirectory, 'lx-sources')
+    await fs.mkdir(cacheDirectory, { recursive: true })
+    await fs.writeFile(
+      getLxSourceCachePath(cacheDirectory, md5(accountUrl)),
+      createSourceScript('账号源', `'not-a-url'`)
+    )
+    await fs.writeFile(
+      getLxSourceCachePath(cacheDirectory, md5(globalUrl)),
+      createSourceScript('全局源', `'https://audio.test/global/' + info.musicInfo.songmid`)
+    )
+    const manager = new LxSourceManager({
+      configs: [{ url: globalUrl, hash: md5(globalUrl), order: 0 }],
+      cacheDirectory,
+      downloadSource: jest.fn()
+    })
+    manager.reconcileAccountSources([[accountUrl]])
+
+    try {
+      manager.start()
+      await manager.waitForInitialLoad()
+      await expect(manager.resolveTrackUrl('qq', 'track-1', 'higher', [accountUrl])).resolves.toEqual(
+        expect.objectContaining({ url: 'https://audio.test/global/track-1' })
+      )
+    } finally {
+      await manager.stop()
+    }
+  })
+
+  test('运行中动态协调账号源，相同 URL 只加载一次并可移除', async () => {
+    const accountUrl = 'https://source.test/dynamic-account.js'
+    const cacheDirectory = path.join(temporaryDirectory, 'lx-sources')
+    const downloadSource = jest.fn().mockResolvedValue(
+      createSourceScript('动态账号源', `'https://audio.test/dynamic/' + info.musicInfo.songmid`)
+    )
+    const manager = new LxSourceManager({ configs: [], cacheDirectory, downloadSource })
+
+    try {
+      manager.start()
+      await manager.waitForInitialLoad()
+      manager.reconcileAccountSources([[accountUrl], [accountUrl]])
+
+      let resolved
+      for (let attempt = 0; attempt < 50 && !resolved; attempt += 1) {
+        resolved = await manager.resolveTrackUrl('qq', 'track-dynamic', 'higher', [accountUrl])
+        if (!resolved) await new Promise((resolve) => setTimeout(resolve, 20))
+      }
+
+      expect(resolved).toEqual(expect.objectContaining({
+        url: 'https://audio.test/dynamic/track-dynamic'
+      }))
+      expect(downloadSource).toHaveBeenCalledTimes(1)
+
+      manager.reconcileAccountSources([])
+      await expect(manager.resolveTrackUrl('qq', 'track-dynamic', 'higher', [accountUrl]))
+        .resolves.toBeUndefined()
+    } finally {
+      await manager.stop()
+    }
+  })
+
   test('更新脚本校验成功后替换缓存和运行中的源', async () => {
     const url = 'https://source.test/update.js'
     const hash = md5(url)

@@ -63,7 +63,12 @@ export interface LxRuntimeExit {
 }
 
 export interface LxTrackUrlResolver {
-  resolveTrackUrl(platform: MusicPlatform, id: string, quality?: string): Promise<TrackUrl | undefined>;
+  resolveTrackUrl(
+    platform: MusicPlatform,
+    id: string,
+    quality?: string,
+    accountSources?: readonly string[]
+  ): Promise<TrackUrl | undefined>;
 }
 
 export interface LxSourceLifecycle {
@@ -71,4 +76,3 @@ export interface LxSourceLifecycle {
   updateAll(): Promise<void>;
   stop(): Promise<void>;
 }
-

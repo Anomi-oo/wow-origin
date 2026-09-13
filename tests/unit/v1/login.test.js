@@ -50,9 +50,9 @@ describe('login router', () => {
       .expect(200)
 
     expect(response.text).toContain('扫码登录')
-    expect(response.text).toContain('以新账号添加')
+    expect(response.text).toContain('扫码添加新账号')
     expect(response.text).toContain('更新已存在账号')
-    expect(response.text).toContain('/login/api/start')
+    expect(response.text).toContain('account-config')
   })
 
   test('验证已存在账号 key', async () => {
@@ -69,7 +69,8 @@ describe('login router', () => {
     expect(response.body.data).toMatchObject({
       apiAccessKey: 'key-1',
       platform: 'qq',
-      accountName: 'QQ'
+      accountName: 'QQ',
+      lxSource: []
     })
   })
 
@@ -141,12 +142,12 @@ describe('login router', () => {
     })
     expect(saved[0]).toMatchObject({
       platform: 'qq',
-      name: '扫码昵称',
+      name: 'QQ',
       cookie: 'uin=o123; qm_keyst=secret',
       api_access_key: 'key-1'
     })
     expect(registry.byAccessKey.get('key-1').cookie).toBe('uin=o123; qm_keyst=secret')
-    expect(registry.byAccessKey.get('key-1').name).toBe('扫码昵称')
+    expect(registry.byAccessKey.get('key-1').name).toBe('QQ')
   })
 
   test('用户详情无昵称时仍写回 cookie 并保留原账号名', async () => {
@@ -238,6 +239,47 @@ describe('login router', () => {
     expect(callModule).not.toHaveBeenCalled()
   })
 
+  test('更新模式不能切换已有账号平台', async () => {
+    const workDir = makeWorkDir()
+    const callModule = jest.fn()
+    const { app } = createApp(workDir, { getPlatform: () => ({ callModule }) })
+
+    const response = await request(app)
+      .post('/login/api/start')
+      .send({ mode: 'update', api_access_key: 'key-1', platform: 'netease' })
+      .expect(400)
+
+    expect(response.body.message).toContain('不能修改平台')
+    expect(callModule).not.toHaveBeenCalled()
+  })
+
+  test('已有账号配置可独立保存且不修改 cookie 和平台', async () => {
+    const workDir = makeWorkDir()
+    const { app, registry } = createApp(workDir, { getPlatform: () => ({ callModule: jest.fn() }) })
+
+    const response = await request(app)
+      .put('/login/api/account/config')
+      .send({
+        api_access_key: 'key-1',
+        name: '客厅账号',
+        stateless: true,
+        useLuoxue: true,
+        lxSource: [' https://example.com/a.js ', 'https://example.com/a.js']
+      })
+      .expect(200)
+
+    expect(response.body.data).toMatchObject({
+      platform: 'qq',
+      name: '客厅账号',
+      stateless: true,
+      useLuoxue: true,
+      lxSource: ['https://example.com/a.js']
+    })
+    expect(registry.byAccessKey.get('key-1').cookie).toBe('old_cookie')
+    const saved = JSON.parse(fs.readFileSync(path.join(workDir, 'data', 'accounts.json'), 'utf8'))
+    expect(saved[0]).toMatchObject({ platform: 'qq', cookie: 'old_cookie', name: '客厅账号' })
+  })
+
   test('新增账号扫码成功后追加写回 accounts.json 和 registry', async () => {
     const workDir = makeWorkDir()
     const callModule = jest.fn(async (route) => {
@@ -307,7 +349,8 @@ describe('login router', () => {
       platform: 'qq',
       name: '新增昵称',
       cookie: 'uin=o999; qm_keyst=new_secret',
-      api_access_key: start.body.data.apiAccessKey
+      api_access_key: start.body.data.apiAccessKey,
+      lxSource: []
     })
     expect(registry.byAccessKey.get(start.body.data.apiAccessKey).name).toBe('新增昵称')
   })

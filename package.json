@@ -14,7 +14,11 @@
     "test:coverage": "jest --coverage",
     "test:unit": "jest tests/unit",
     "test:integration": "jest tests/integration",
-    "clean": "rm -rf coverage dist"
+    "clean": "node -e \"const fs=require('fs'); for (const p of ['coverage','dist']) fs.rmSync(p,{recursive:true,force:true})\"",
+    "desktop:prepare": "node scripts/prepare-desktop.mjs",
+    "desktop:dev": "npm run build && npm run desktop:prepare && tauri dev",
+    "desktop:build": "npm run build && npm run desktop:prepare && tauri build",
+    "tauri": "tauri"
   },
   "keywords": [
     "music",
@@ -38,12 +42,15 @@
     "express": "^5.1.0",
     "got": "^11.8.6",
     "qrc-decoder": "1.0.2",
+    "qrcode": "^1.5.4",
     "tough-cookie": "^6.0.0"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.3",
     "@types/node": "^22.15.32",
+    "@types/qrcode": "^1.5.6",
     "jest": "^30.2.0",
     "supertest": "^7.1.4",
     "ts-jest": "^29.1.1",

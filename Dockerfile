@@ -1,4 +1,4 @@
-FROM node:22-alpine AS builder
+FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS builder
 
 WORKDIR /app
 
@@ -26,6 +26,7 @@ COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
 COPY --chown=nodejs:nodejs core ./core
 COPY --chown=nodejs:nodejs platforms ./platforms
 COPY --chown=nodejs:nodejs util ./util
+COPY --chown=nodejs:nodejs public ./public
 COPY --chown=nodejs:nodejs LICENSE ./LICENSE
 
 ENV NODE_ENV=production \

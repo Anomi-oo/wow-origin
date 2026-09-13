@@ -70,8 +70,13 @@ module.exports = {
   // 忽略的路径
   testPathIgnorePatterns: [
     '/node_modules/',
+    '/desktop-runtime/',
     '/docs/',
     '/tests/integration/'
+  ],
+  modulePathIgnorePatterns: [
+    '<rootDir>/desktop-runtime/',
+    '<rootDir>/src-tauri/target/'
   ],
 
   // 设置文件（在所有测试前运行）

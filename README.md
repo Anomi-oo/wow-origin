@@ -4,7 +4,7 @@
 
 Aduoer Wow Origin 是一个基于 Node.js 与 TypeScript 的多平台音乐 API 服务，为 Aduoer 客户端提供统一的 Wow v1 接口，并兼容网易云音乐、QQ 音乐的部分上游接口。
 
-项目目前仅支持从本仓库的 `Dockerfile` 本地构建镜像，不依赖任何远程镜像仓库。
+Docker 仍是主要部署方式；项目同时提供 Windows 和 Apple Silicon macOS 桌面安装包，适合没有服务器但有常开电脑的用户。
 
 ## 功能
 
@@ -15,14 +15,35 @@ Aduoer Wow Origin 是一个基于 Node.js 与 TypeScript 的多平台音乐 API 
 - 可选接入洛雪自定义源，为 `/v1/track/url` 提供播放地址回退
 - 提供缓存、并发限制、结构化错误和自动化测试
 
-## 快速开始
+## 使用文档
 
-### 环境要求
+### 桌面版
+
+从 GitHub Release 下载 Windows x64 的 `.exe` 或 Apple Silicon macOS 的 `.dmg`。桌面版已经内置 Node.js，不需要另外安装 Node 或 Docker。
+
+- 应用默认监听 `23231`；端口被占用时会自动选择空闲端口，实际地址以首页显示为准。
+- 关闭窗口后代理继续在系统托盘运行；通过托盘中的“退出”才会停止代理。
+- 首页可以选择电脑的局域网 IPv4 地址，并生成 Aduoer 快捷添加源二维码。二维码中的 Token 留空，扫码后需要手动填写账号的 `api_access_key`。
+- 点击左侧的“Login”即可登录或管理账号；也可以在浏览器打开首页显示地址后的 `/login`，例如 `http://192.168.1.8:23231/login`。
+- Login 页面只能通过扫码新增真实账号，或通过已有 `api_access_key` 管理配置；无 Cookie 账号仍需手工编辑配置文件。
+
+桌面版数据保存在系统应用数据目录的 `data/` 子目录中。常见位置如下：
+
+```text
+Windows: %APPDATA%\com.anomi-oo.woworigin\data
+macOS:   ~/Library/Application Support/com.anomi-oo.woworigin/data
+```
+
+首版安装包未签名。Windows 可能显示 SmartScreen 提示；macOS 可能需要在“系统设置 → 隐私与安全性”中允许打开。
+
+### Docker 部署
+
+#### 环境要求
 
 - Docker 20.10 或更高版本
 - Docker Compose v2（使用 Compose 部署时）
 
-### 1. 准备配置
+#### 1. 准备配置
 
 复制环境变量与账号配置示例：
 
@@ -47,7 +68,8 @@ openssl rand -hex 32
     "cookie": "",
     "api_access_key": "替换为随机生成的访问密钥",
     "stateless": false,
-    "useLuoxue": true
+    "useLuoxue": true,
+    "lxSource": []
   },
   {
     "platform": "netease",
@@ -55,7 +77,8 @@ openssl rand -hex 32
     "cookie": "",
     "api_access_key": "替换为另一个随机访问密钥",
     "stateless": false,
-    "useLuoxue": true
+    "useLuoxue": true,
+    "lxSource": []
   }
 ]
 ```
@@ -70,10 +93,11 @@ openssl rand -hex 32
 | `api_access_key` | `/v1/*` 接口的访问令牌，必填且必须唯一 |
 | `stateless` | 是否以无状态方式使用账号 |
 | `useLuoxue` | 是否允许使用洛雪自定义源解析播放地址 |
+| `lxSource` | 当前账号优先使用的洛雪源 URL 数组，最多 10 个；失败后继续尝试全局源 |
 
 缺失、为空或重复的 `api_access_key` 会导致对应账号被忽略。`stateless` 和 `useLuoxue` 必须使用 JSON 布尔值。
 
-### 2. 使用 Docker 运行
+#### 2. 使用 Docker 运行
 
 在项目目录执行：
 
@@ -93,7 +117,7 @@ docker run -d \
 docker logs -f aduoer-wow
 ```
 
-### 使用 Docker Compose
+#### 使用 Docker Compose
 
 `docker-compose.yml` 同样通过当前目录的 `Dockerfile` 构建，不会拉取远程项目镜像：
 
@@ -111,9 +135,29 @@ docker compose down
 
 服务默认监听 `http://localhost:3000`，账号数据和洛雪源缓存保存在宿主机的 `data/` 目录中。
 
-## API 使用
+### 登录账号
 
-### Wow v1 API
+服务启动后，在浏览器中打开登录页面：
+
+```text
+本机 Docker 或 Node.js：http://localhost:3000/login
+远程服务器：http://服务器 IP 或域名:端口/login
+桌面版：http://首页显示的 IP:实际端口/login
+```
+
+例如服务器地址为 `192.168.1.8`、端口为 `3000`，登录地址就是：
+
+```text
+http://192.168.1.8:3000/login
+```
+
+首次添加账号时选择平台并扫码；扫码成功后会创建账号、显示生成的 `api_access_key`，并进入账号配置页面。更新已有账号时输入 `api_access_key` 即可直接修改名称、无状态模式和洛雪源配置，不需要重新扫码；只有刷新 Cookie 时才需要再次扫码。
+
+登录成功后，服务会更新内存中的账号会话，并把 Cookie 写回 `data/accounts.json`。该文件包含登录凭据，不应提交到 Git、发送给他人或放入公开镜像。网页不提供无 Cookie 账号的创建入口，此类账号只能手工写入 `accounts.json`。
+
+### API 使用
+
+#### Wow v1 API
 
 `/v1/*` 使用 `Authorization` 请求头认证。令牌对应 `data/accounts.json` 中的 `api_access_key`，并由服务端决定使用哪个平台账号。
 
@@ -147,7 +191,7 @@ curl -H "Authorization: Bearer your_api_access_key" \
 
 播放地址接口支持自动策略 `max`、`min`，以及 `standard`、`higher`、`exhigh`、`lossless`。自动策略会根据平台能力进行降级或升级，指定具体音质时不会自动切换。
 
-### 平台兼容接口
+#### 平台兼容接口
 
 项目还保留部分平台原始接口，通过 `platform=netease` 或 `platform=qqmusic` 选择平台：
 
@@ -159,27 +203,7 @@ curl "http://localhost:3000/toplist?platform=qqmusic"
 
 此类接口可直接通过 Cookie 或查询参数传递登录信息。新接入建议优先使用 `/v1/*`，避免客户端持有平台 Cookie。
 
-### OpenAPI 文档
-
-开发环境会提供：
-
-```text
-http://localhost:3000/openapi.json
-```
-
-当 `NODE_ENV=production` 时，该端点不会公开。
-
-## 扫码登录
-
-先在 `data/accounts.json` 中创建账号并设置 `api_access_key`，然后打开：
-
-```text
-http://localhost:3000/login?api_access_key=your_api_access_key
-```
-
-登录成功后，服务会更新内存中的账号会话，并把 Cookie 写回挂载的 `data/accounts.json`。该文件包含登录凭据，不应提交到 Git、发送给他人或放入公开镜像。
-
-## 环境变量
+### 环境变量
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
@@ -193,9 +217,21 @@ http://localhost:3000/login?api_access_key=your_api_access_key
 
 洛雪源仅接管 `/v1/track/url` 的播放地址解析。自定义源 JavaScript 会作为运维可信代码在独立 Worker 中运行，但 Worker 不是安全沙箱，请勿配置未经审核或由用户提交的源地址。
 
+账号配置了 `lxSource` 时，解析顺序为账号源、全局环境变量源；账号源失败后仍会尝试全局源。`useLuoxue` 为 `false` 时不会调用任何洛雪源。
+
 源文件缓存在 `data/lx-sources/`。服务启动时会异步加载，并按进程本地时区每天凌晨 1 点检查更新。
 
-## 本地开发
+### 安全说明
+
+- `.env`、`data/accounts.json`、`data/lx-sources/` 已加入 `.gitignore`。
+- 桌面安装包不会内置本机账号数据；账号 Cookie 只写入系统应用数据目录。
+- Docker 构建上下文会排除 `.env` 和整个 `data/` 目录，账号 Cookie 不会被写入镜像。
+- 不要在源码、Issue、日志或截图中公开 Cookie、`api_access_key`、访问令牌和自定义源私有地址。
+- 如果凭据曾进入 Git 历史或公开仓库，仅删除当前文件并不足够；应立即在对应平台撤销或刷新凭据，并清理 Git 历史。
+
+## 开发文档
+
+### 本地开发
 
 环境要求：Node.js 22 或更高版本。
 
@@ -213,11 +249,22 @@ npm test
 npm run test:unit
 npm run test:integration
 npm run test:coverage
+npm run desktop:build
 ```
 
 集成测试会访问真实的上游音乐服务，需要可用网络。
 
-## 项目结构
+### OpenAPI 文档
+
+开发环境会提供：
+
+```text
+http://localhost:3000/openapi.json
+```
+
+当 `NODE_ENV=production` 时，该端点不会公开。
+
+### 项目结构
 
 ```text
 wow-origin/
@@ -227,19 +274,15 @@ wow-origin/
 ├── types/                  # TypeScript 类型扩展
 ├── util/                   # 通用工具
 ├── tests/                  # 单元测试和集成测试
+├── public/                 # 首页与账号管理页面
+├── src-tauri/              # Tauri 桌面壳、托盘和 sidecar 生命周期
+├── scripts/                # 桌面运行时准备脚本
 ├── data/
 │   └── accounts.example.json
 ├── Dockerfile
 ├── docker-compose.yml
 └── package.json
 ```
-
-## 安全说明
-
-- `.env`、`data/accounts.json`、`data/lx-sources/` 已加入 `.gitignore`。
-- Docker 构建上下文会排除 `.env` 和整个 `data/` 目录，账号 Cookie 不会被写入镜像。
-- 不要在源码、Issue、日志或截图中公开 Cookie、`api_access_key`、访问令牌和自定义源私有地址。
-- 如果凭据曾进入 Git 历史或公开仓库，仅删除当前文件并不足够；应立即在对应平台撤销或刷新凭据，并清理 Git 历史。
 
 ## 致谢
 

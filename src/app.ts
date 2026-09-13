@@ -7,6 +7,7 @@ import { preloadData } from './onload';
 import { APIError } from './errors';
 import { AccountSessionRegistry, loadAccountSessions } from './accounts';
 import { createLoginRouter } from './login';
+import { createDashboardRouter } from './dashboard';
 import { createLoginRefreshScheduler } from './loginRefresh';
 import {
   createLxSourceManager,
@@ -88,6 +89,7 @@ class MultiPlatformServer {
     this.app!.use(cookieParser());
     this.app!.use(express.static(path.join(__dirname, '..', 'public')));
     this.accountSessions = loadAccountSessions();
+    this.reconcileLxSources();
 
     this.app!.use((req: Request, res: Response, next: NextFunction) => {
       const isDocsPath = req.path.startsWith('/docs');
@@ -96,7 +98,7 @@ class MultiPlatformServer {
           'Access-Control-Allow-Credentials': 'true',
           'Access-Control-Allow-Origin': CORS_ALLOW_ORIGIN || (req.headers.origin as string) || '*',
           'Access-Control-Allow-Headers': 'X-Requested-With,Content-Type,Authorization',
-          'Access-Control-Allow-Methods': 'POST,GET,OPTIONS',
+          'Access-Control-Allow-Methods': 'POST,PUT,GET,OPTIONS',
           'Content-Type': 'application/json; charset=utf-8',
         });
       }
@@ -114,7 +116,12 @@ class MultiPlatformServer {
       });
     }
 
-    this.app!.use('/login', createLoginRouter({ registry: this.accountSessions, platformFactory }));
+    this.app!.use('/app/api', createDashboardRouter());
+    this.app!.use('/login', createLoginRouter({
+      registry: this.accountSessions,
+      platformFactory,
+      onAccountsChanged: () => this.reconcileLxSources()
+    }));
     this.app!.use(createWowRouter({
       resolveContext: createWowContextResolver(this.accountSessions, this.lxSourceManager),
       onError: (error, request) => this.logger.error('Wow v1 request failed', error, { url: request.url })
@@ -143,6 +150,12 @@ class MultiPlatformServer {
       }
       res.status(500).json(Result.error('Internal server error', 500));
     });
+  }
+
+  private reconcileLxSources(): void {
+    this.lxSourceManager.reconcileAccountSources(
+      this.accountSessions.sessions.map((session) => session.lxSource)
+    );
   }
 
   async handleResourceAPI(req: Request, res: Response, route: string): Promise<void> {

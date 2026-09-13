@@ -10,6 +10,7 @@ export interface RawMusicAccount {
   api_access_key?: unknown;
   stateless?: unknown;
   useLuoxue?: unknown;
+  lxSource?: unknown;
 }
 
 export interface MusicAccountSession {
@@ -19,6 +20,7 @@ export interface MusicAccountSession {
   apiAccessKey: string;
   stateless: boolean;
   useLuoxue: boolean;
+  lxSource: string[];
   favoriteTrackIds: Set<string>;
 }
 
@@ -37,6 +39,13 @@ export interface CreateAccountResult {
   filePath: string;
 }
 
+export interface UpdateAccountConfigInput {
+  name: unknown;
+  stateless: unknown;
+  useLuoxue: unknown;
+  lxSource: unknown;
+}
+
 export const sessionsTemplate: RawMusicAccount[] = [
   {
     platform: 'qq',
@@ -44,7 +53,8 @@ export const sessionsTemplate: RawMusicAccount[] = [
     cookie: '',
     api_access_key: '',
     stateless: false,
-    useLuoxue: true
+    useLuoxue: true,
+    lxSource: []
   },
   {
     platform: 'qq',
@@ -52,7 +62,8 @@ export const sessionsTemplate: RawMusicAccount[] = [
     cookie: '',
     api_access_key: '',
     stateless: false,
-    useLuoxue: true
+    useLuoxue: true,
+    lxSource: []
   },
   {
     platform: 'netease',
@@ -60,7 +71,8 @@ export const sessionsTemplate: RawMusicAccount[] = [
     cookie: '',
     api_access_key: '',
     stateless: false,
-    useLuoxue: true
+    useLuoxue: true,
+    lxSource: []
   }
 ];
 
@@ -84,6 +96,61 @@ function normalizeAccountUseLuoxue(value: unknown): { value: boolean; invalid: b
   if (value === undefined) return { value: true, invalid: false };
   if (typeof value === 'boolean') return { value, invalid: false };
   return { value: false, invalid: true };
+}
+
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+/** 严格校验来自网页的账号洛雪源配置。 */
+export function normalizeAccountLxSources(value: unknown): string[] {
+  if (!Array.isArray(value)) throw new Error('lxSource 必须是数组');
+  const sources: string[] = [];
+  const seen = new Set<string>();
+
+  value.forEach((item) => {
+    if (typeof item !== 'string') throw new Error('lxSource 中的地址必须是字符串');
+    const source = item.trim();
+    if (!source) return;
+    if (!isHttpUrl(source)) throw new Error(`洛雪源地址无效: ${source}`);
+    if (seen.has(source)) return;
+    seen.add(source);
+    sources.push(source);
+  });
+
+  if (sources.length > 10) throw new Error('lxSource 最多配置 10 个地址');
+  return sources;
+}
+
+/** 手工配置错误不应阻止账号注册；无效项会被忽略并记录警告。 */
+function loadAccountLxSources(value: unknown, accountName: string): string[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) {
+    console.warn(`[accounts] 账号 "${accountName}" 的 lxSource 必须是数组，已按空数组处理`);
+    return [];
+  }
+
+  const valid: string[] = [];
+  const seen = new Set<string>();
+  value.forEach((item) => {
+    const source = typeof item === 'string' ? item.trim() : '';
+    if (!source || !isHttpUrl(source)) {
+      console.warn(`[accounts] 账号 "${accountName}" 包含无效的 lxSource，已忽略`);
+      return;
+    }
+    if (seen.has(source)) return;
+    seen.add(source);
+    if (valid.length < 10) valid.push(source);
+  });
+  if (seen.size > 10) {
+    console.warn(`[accounts] 账号 "${accountName}" 的 lxSource 超过 10 个，仅使用前 10 个`);
+  }
+  return valid;
 }
 
 function printTemplate(): void {
@@ -216,20 +283,22 @@ export function loadAccountSessions(workDir: string = process.cwd()): AccountSes
 
     try {
       const platform = normalizeAccountPlatform(account.platform);
+      const accountName = String(account.name || `${platform}-${index + 1}`).trim();
       const stateless = normalizeAccountStateless(account.stateless);
       const useLuoxue = normalizeAccountUseLuoxue(account.useLuoxue);
       if (useLuoxue.invalid) {
         console.warn(
-          `[accounts] 账号 "${String(account.name || `${platform}-${index + 1}`).trim()}" 的 useLuoxue 必须是 boolean，已按 false 处理`
+          `[accounts] 账号 "${accountName}" 的 useLuoxue 必须是 boolean，已按 false 处理`
         );
       }
       parsedSessions.push({
         platform,
-        name: String(account.name || `${platform}-${index + 1}`).trim(),
+        name: accountName,
         cookie: String(account.cookie || ''),
         apiAccessKey,
         stateless,
         useLuoxue: useLuoxue.value,
+        lxSource: loadAccountLxSources(account.lxSource, accountName),
         favoriteTrackIds: new Set<string>()
       });
       keyCounts.set(apiAccessKey, (keyCounts.get(apiAccessKey) || 0) + 1);
@@ -262,8 +331,7 @@ export function updateAccountCookieByAccessKey(
   platformValue: unknown,
   cookie: string,
   registry: AccountSessionRegistry,
-  workDir: string = process.cwd(),
-  accountName?: string
+  workDir: string = process.cwd()
 ): UpdateAccountCookieResult {
   const token = String(apiAccessKey || '').trim();
   if (!token) {
@@ -274,6 +342,9 @@ export function updateAccountCookieByAccessKey(
   const session = registry.byAccessKey.get(token);
   if (!session) {
     throw new Error('api_access_key 无效或未注册到 accounts.json');
+  }
+  if (session.platform !== platform) {
+    throw new Error('更新已有账号时不能修改平台');
   }
 
   const normalizedCookie = String(cookie || '').trim();
@@ -294,20 +365,15 @@ export function updateAccountCookieByAccessKey(
   }
 
   const account = target as RawMusicAccount;
-  const normalizedName = String(accountName || '').trim();
-  account.platform = platform;
-  account.cookie = normalizedCookie;
-  if (normalizedName) {
-    account.name = normalizedName;
+  const storedPlatform = normalizeAccountPlatform(account.platform);
+  if (storedPlatform !== session.platform) {
+    throw new Error('accounts.json 中账号平台与当前会话不一致');
   }
+  account.cookie = normalizedCookie;
 
   writeRawAccounts(filePath, rawAccounts);
 
-  session.platform = platform;
   session.cookie = normalizedCookie;
-  if (normalizedName) {
-    session.name = normalizedName;
-  }
   registry.byAccessKey.set(token, session);
 
   return { session, filePath };
@@ -353,7 +419,8 @@ export function createAccountWithCookie(
     cookie: normalizedCookie,
     api_access_key: token,
     stateless: false,
-    useLuoxue: true
+    useLuoxue: true,
+    lxSource: []
   };
   rawAccounts.push(account);
   writeRawAccounts(filePath, rawAccounts);
@@ -365,10 +432,50 @@ export function createAccountWithCookie(
     apiAccessKey: token,
     stateless: false,
     useLuoxue: true,
+    lxSource: [],
     favoriteTrackIds: new Set<string>()
   };
   registry.sessions.push(session);
   registry.byAccessKey.set(token, session);
 
+  return { session, filePath };
+}
+
+/** 更新网页可编辑的账号配置，不允许借此修改平台、Cookie 或访问密钥。 */
+export function updateAccountConfigByAccessKey(
+  apiAccessKey: string,
+  input: UpdateAccountConfigInput,
+  registry: AccountSessionRegistry,
+  workDir: string = process.cwd()
+): UpdateAccountCookieResult {
+  const token = String(apiAccessKey || '').trim();
+  if (!token) throw new Error('api_access_key 是必填参数');
+  const session = registry.byAccessKey.get(token);
+  if (!session) throw new Error('api_access_key 无效或未注册到 accounts.json');
+
+  if (typeof input.name !== 'string') throw new Error('名称必须是字符串');
+  const name = input.name.trim();
+  if (!name) throw new Error('名称不能为空');
+  if (name.length > 100) throw new Error('名称不能超过 100 个字符');
+  if (typeof input.stateless !== 'boolean') throw new Error('stateless 必须是 boolean');
+  if (typeof input.useLuoxue !== 'boolean') throw new Error('useLuoxue 必须是 boolean');
+  const lxSource = normalizeAccountLxSources(input.lxSource);
+
+  const { filePath, rawAccounts } = readRawAccountsForWrite(workDir);
+  const target = rawAccounts.find((raw) => (
+    raw && typeof raw === 'object' && String(raw.api_access_key || '').trim() === token
+  ));
+  if (!target) throw new Error('accounts.json 中未找到对应 api_access_key');
+
+  target.name = name;
+  target.stateless = input.stateless;
+  target.useLuoxue = input.useLuoxue;
+  target.lxSource = lxSource;
+  writeRawAccounts(filePath, rawAccounts);
+
+  session.name = name;
+  session.stateless = input.stateless;
+  session.useLuoxue = input.useLuoxue;
+  session.lxSource = lxSource;
   return { session, filePath };
 }

@@ -1,0 +1,20 @@
+[package]
+name = "wow-desktop"
+version = "1.0.0"
+description = "Aduoer Wow local origin"
+authors = ["Anomi-oo"]
+edition = "2021"
+
+[lib]
+name = "wow_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-shell = "2"
+tauri-plugin-single-instance = "2"

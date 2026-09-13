@@ -17,11 +17,15 @@ export function md5(value: string): string {
 }
 
 export function loadLxSourceConfigs(env: NodeJS.ProcessEnv = process.env): LxSourceConfig[] {
+  return createLxSourceConfigs(LX_SOURCE_ENV_KEYS.map((key) => env[key] ?? ''));
+}
+
+export function createLxSourceConfigs(urls: readonly string[]): LxSourceConfig[] {
   const seen = new Set<string>();
   const configs: LxSourceConfig[] = [];
 
-  LX_SOURCE_ENV_KEYS.forEach((key, order) => {
-    const url = env[key]?.trim();
+  urls.forEach((value, order) => {
+    const url = value.trim();
     if (!url || seen.has(url)) return;
 
     try {

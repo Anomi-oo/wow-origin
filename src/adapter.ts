@@ -37,7 +37,9 @@ export function createAdapter(
   const defaultGetTrackUrl = client.getTrackUrl.bind(client);
   const getLxTrackUrl = async (id: string, quality?: string): Promise<TrackUrl | undefined> => {
     try {
-      const lxTrackUrl = await lxTrackUrlResolver.resolveTrackUrl(account.platform, id, quality);
+      const lxTrackUrl = account.lxSource?.length
+        ? await lxTrackUrlResolver.resolveTrackUrl(account.platform, id, quality, account.lxSource)
+        : await lxTrackUrlResolver.resolveTrackUrl(account.platform, id, quality);
       if (hasValidAudioUrl(lxTrackUrl)) return lxTrackUrl;
       if (lxTrackUrl) {
         console.warn('[lx-source] resolver returned an invalid audio URL, using official track URL flow');

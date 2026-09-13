@@ -23,6 +23,11 @@ docs/
 .idea/
 .vscode/
 
+# 桌面应用构建资源
+.cache/
+desktop-runtime/
+src-tauri/
+
 # 本地编排与辅助脚本
 docker-compose*.yml
 build.sh

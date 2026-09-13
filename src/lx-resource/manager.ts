@@ -7,6 +7,7 @@ import type { MusicPlatform } from '../types';
 import {
   getLxSourceCacheDirectory,
   getLxSourceCachePath,
+  createLxSourceConfigs,
   mapLxQualityToTrackUrl,
   mapMusicPlatformToLx,
   parseLxScriptInfo,
@@ -68,7 +69,8 @@ function safeErrorMessage(error: unknown): string {
 }
 
 export class LxSourceManager implements LxTrackUrlResolver, LxSourceLifecycle {
-  private readonly configs: LxSourceConfig[];
+  private readonly globalConfigs: LxSourceConfig[];
+  private configs: LxSourceConfig[];
   private readonly cacheDirectory: string;
   private readonly downloadSourceImpl: (url: string) => Promise<string>;
   private readonly sources = new Map<string, RegisteredSource>();
@@ -77,14 +79,15 @@ export class LxSourceManager implements LxTrackUrlResolver, LxSourceLifecycle {
   private stopped = false;
 
   constructor(options: ManagerOptions) {
-    this.configs = [...options.configs].sort((left, right) => left.order - right.order);
+    this.globalConfigs = [...options.configs].sort((left, right) => left.order - right.order);
+    this.configs = [...this.globalConfigs];
     this.cacheDirectory = options.cacheDirectory
       ?? getLxSourceCacheDirectory(options.workDir);
     this.downloadSourceImpl = options.downloadSource ?? ((url) => this.downloadSource(url));
   }
 
   start(): void {
-    if (this.initialLoad || this.stopped || this.configs.length === 0) return;
+    if (this.initialLoad || this.stopped) return;
     this.initialLoad = Promise.all(this.configs.map((config) => (
       this.runExclusive(config, () => this.loadAtStartup(config))
     ))).then(() => undefined).catch((error) => {
@@ -96,12 +99,48 @@ export class LxSourceManager implements LxTrackUrlResolver, LxSourceLifecycle {
     await this.initialLoad;
   }
 
-  async resolveTrackUrl(platform: MusicPlatform, id: string, quality?: string): Promise<TrackUrl | undefined> {
+  /**
+   * 让管理器持有全局源与所有账号源的并集。相同 URL 只注册一次；账号
+   * 自己的调用顺序由 resolveTrackUrl 的 accountSources 参数决定。
+   */
+  reconcileAccountSources(sourceGroups: readonly (readonly string[])[]): void {
+    const desired = new Map<string, LxSourceConfig>();
+    this.globalConfigs.forEach((config) => desired.set(config.hash, config));
+    sourceGroups.forEach((sources) => {
+      createLxSourceConfigs(sources).forEach((config) => desired.set(config.hash, config));
+    });
+
+    const previousHashes = new Set(this.configs.map((config) => config.hash));
+    this.configs = [...desired.values()];
+
+    for (const [hash, source] of this.sources.entries()) {
+      if (desired.has(hash)) continue;
+      this.sources.delete(hash);
+      void source.runtime.drainAndTerminate();
+    }
+
+    if (!this.initialLoad || this.stopped) return;
+    this.configs
+      .filter((config) => !previousHashes.has(config.hash))
+      .forEach((config) => {
+        void this.runExclusive(config, () => this.loadAtStartup(config));
+      });
+  }
+
+  async resolveTrackUrl(
+    platform: MusicPlatform,
+    id: string,
+    quality?: string,
+    accountSources: readonly string[] = []
+  ): Promise<TrackUrl | undefined> {
     if (this.stopped || this.sources.size === 0) return undefined;
     const lxPlatform = mapMusicPlatformToLx(platform);
     const deadline = Date.now() + SOURCE_CHAIN_TIMEOUT_MS;
+    const selectedConfigs = new Map<string, LxSourceConfig>();
+    createLxSourceConfigs(accountSources).forEach((config) => selectedConfigs.set(config.hash, config));
+    this.globalConfigs.forEach((config) => selectedConfigs.set(config.hash, config));
 
-    for (const config of this.configs) {
+    for (const config of selectedConfigs.values()) {
       const remaining = deadline - Date.now();
       if (remaining <= 0) break;
       const source = this.sources.get(config.hash);
@@ -226,6 +265,10 @@ export class LxSourceManager implements LxTrackUrlResolver, LxSourceLifecycle {
     }
 
     if (this.stopped) {
+      await runtime.terminate();
+      return;
+    }
+    if (!this.configs.some((candidate) => candidate.hash === config.hash)) {
       await runtime.terminate();
       return;
     }
