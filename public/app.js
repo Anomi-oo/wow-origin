@@ -232,10 +232,11 @@
     const list = $('lx-source-list'); list.replaceChildren();
     (sources.length ? sources : ['']).forEach((source) => addSourceInput(source));
   }
+  function isSafeSourceUrl(value) { return value === '' || /^https?:\/\//i.test(value); }
   function addSourceInput(value = '') {
     const list = $('lx-source-list'); if (list.children.length >= 10) return;
     const row = document.createElement('div'); row.className = 'source-row';
-    const input = document.createElement('input'); input.type = 'url'; input.placeholder = 'https://example.com/source.js'; input.value = value;
+    const input = document.createElement('input'); input.type = 'url'; input.placeholder = 'https://example.com/source.js'; input.value = isSafeSourceUrl(value) ? value : '';
     const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'icon-button'; remove.textContent = '删除';
     remove.addEventListener('click', () => { row.remove(); if (!list.children.length) addSourceInput(); });
     row.append(input, remove); list.append(row);
