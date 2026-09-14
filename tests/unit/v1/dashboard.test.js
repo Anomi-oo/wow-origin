@@ -1,6 +1,8 @@
 const express = require('express')
 const fs = require('node:fs')
+const os = require('node:os')
 const path = require('node:path')
+const { spawnSync } = require('node:child_process')
 const request = require('supertest')
 const {
   createDashboardRouter,
@@ -58,12 +60,43 @@ describe('desktop dashboard', () => {
     expect(response.body.data.qrImage).toMatch(/^data:image\/png;base64,/)
   })
 
+  test('内嵌 Node 启动器可从含空格的 sidecar 目录加载服务入口', () => {
+    const temporaryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wow sidecar '))
+    try {
+      const executableDir = path.join(temporaryDir, 'Wow App')
+      const runtimeDir = path.join(executableDir, 'server-runtime', 'dist')
+      fs.mkdirSync(runtimeDir, { recursive: true })
+      fs.writeFileSync(
+        path.join(runtimeDir, 'server.js'),
+        "module.exports.start = () => process.stdout.write('WOW_BOOTSTRAP_OK')"
+      )
+      const bootstrap = fs.readFileSync(
+        path.join(process.cwd(), 'src-tauri', 'src', 'node-runtime-bootstrap.cjs'),
+        'utf8'
+      )
+      const executablePath = path.join(executableDir, process.platform === 'win32' ? 'node.exe' : 'node')
+      const result = spawnSync(
+        process.execPath,
+        ['--eval', `process.execPath = ${JSON.stringify(executablePath)};\n${bootstrap}`],
+        { encoding: 'utf8' }
+      )
+
+      expect(result.status).toBe(0)
+      expect(result.stderr).toBe('')
+      expect(result.stdout).toBe('WOW_BOOTSTRAP_OK')
+    } finally {
+      fs.rmSync(temporaryDir, { recursive: true, force: true })
+    }
+  })
+
   test('本地页面包含导航、地址选择、账号二维码和动态账号配置表单', () => {
     const publicDirectory = path.join(process.cwd(), 'public')
     const html = fs.readFileSync(path.join(publicDirectory, 'index.html'), 'utf8')
     const script = fs.readFileSync(path.join(publicDirectory, 'app.js'), 'utf8')
     const styles = fs.readFileSync(path.join(publicDirectory, 'styles.css'), 'utf8')
     const tauriSource = fs.readFileSync(path.join(process.cwd(), 'src-tauri', 'src', 'lib.rs'), 'utf8')
+    const tauriMain = fs.readFileSync(path.join(process.cwd(), 'src-tauri', 'src', 'main.rs'), 'utf8')
+    const nodeBootstrap = fs.readFileSync(path.join(process.cwd(), 'src-tauri', 'src', 'node-runtime-bootstrap.cjs'), 'utf8')
 
     expect(html).toContain('data-page="home"')
     expect(html).toContain('data-page="login"')
@@ -84,8 +117,21 @@ describe('desktop dashboard', () => {
     expect(script).toMatch(/async function loadDesktopAccounts\(\) \{\s+if \(!isTauri\(\)\) return;/)
     expect(tauriSource).toContain('fn list_accounts<R: Runtime>')
     expect(tauriSource).toContain('.join("accounts.json")')
+    expect(tauriSource).toContain('.arg("--eval")')
+    expect(tauriSource).toContain('include_str!("node-runtime-bootstrap.cjs")')
+    expect(tauriSource).not.toContain('.arg(script.to_string_lossy().to_string())')
+    expect(tauriSource).not.toContain('WOW_RUNTIME_SCRIPT')
+    expect(tauriSource).toContain('logs_dir.join("backend.log")')
+    expect(tauriSource).toContain('capture_stderr(&state, &bytes)')
+    expect(tauriMain).toContain('windows_subsystem = "windows"')
+    expect(nodeBootstrap).toContain('createRequire(process.execPath)')
+    expect(nodeBootstrap).not.toContain('process.chdir(')
+    expect(nodeBootstrap).toContain("'./server-runtime/dist/server.js'")
+    expect(nodeBootstrap).toContain("'../Resources/server-runtime/dist/server.js'")
+    expect(nodeBootstrap).toContain('runtimeRequire(runtimeScript).start()')
     expect(styles).toContain('.tauri body[data-page="login"] .content')
     expect(styles).toContain('.account-identity { display:grid;')
+    expect(styles).toContain('.splash #splash-message')
     expect(styles).toContain('scrollbar-width:none')
     expect(html).not.toMatch(/<script[^>]+https?:\/\//)
   })

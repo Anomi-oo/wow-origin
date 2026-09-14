@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::io::ErrorKind;
+use std::fs::OpenOptions;
+use std::io::{ErrorKind, Write};
 use std::path::PathBuf;
 use std::sync::{
     atomic::{AtomicBool, AtomicU64, Ordering},
@@ -17,12 +18,16 @@ use tauri_plugin_shell::{
     ShellExt,
 };
 
+const NODE_RUNTIME_BOOTSTRAP: &str = include_str!("node-runtime-bootstrap.cjs");
+const MAX_CAPTURED_STDERR_BYTES: usize = 8 * 1024;
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct BackendSnapshot {
     state: String,
     base_url: String,
     error: String,
+    log_path: String,
 }
 
 #[derive(Deserialize)]
@@ -51,6 +56,7 @@ impl BackendSnapshot {
             state: "starting".into(),
             base_url: String::new(),
             error: String::new(),
+            log_path: String::new(),
         }
     }
 }
@@ -61,6 +67,7 @@ struct BackendState {
     generation: AtomicU64,
     starting: AtomicBool,
     exiting: AtomicBool,
+    last_stderr: Mutex<String>,
 }
 
 impl BackendState {
@@ -71,6 +78,7 @@ impl BackendState {
             generation: AtomicU64::new(0),
             starting: AtomicBool::new(false),
             exiting: AtomicBool::new(false),
+            last_stderr: Mutex::new(String::new()),
         })
     }
 }
@@ -160,11 +168,34 @@ fn runtime_script<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
 }
 
 fn set_failed(state: &BackendState, message: String) {
-    *state.snapshot.lock().expect("backend snapshot lock") = BackendSnapshot {
-        state: "failed".into(),
-        base_url: String::new(),
-        error: message,
+    let mut snapshot = state.snapshot.lock().expect("backend snapshot lock");
+    snapshot.state = "failed".into();
+    snapshot.base_url.clear();
+    snapshot.error = message;
+}
+
+fn append_backend_log(log_path: &PathBuf, stream: &str, bytes: &[u8]) {
+    let Ok(mut file) = OpenOptions::new().create(true).append(true).open(log_path) else {
+        return;
     };
+    let text = String::from_utf8_lossy(bytes);
+    let _ = writeln!(file, "[{stream}] {}", text.trim_end());
+}
+
+fn capture_stderr(state: &BackendState, bytes: &[u8]) {
+    let text = String::from_utf8_lossy(bytes);
+    let mut captured = state.last_stderr.lock().expect("backend stderr lock");
+    captured.push_str(&text);
+    if !text.ends_with('\n') {
+        captured.push('\n');
+    }
+    if captured.len() > MAX_CAPTURED_STDERR_BYTES {
+        let mut start = captured.len() - MAX_CAPTURED_STDERR_BYTES;
+        while !captured.is_char_boundary(start) {
+            start += 1;
+        }
+        captured.drain(..start);
+    }
 }
 
 fn start_backend<R: Runtime>(app: AppHandle<R>, state: Arc<BackendState>) -> Result<(), String> {
@@ -177,12 +208,32 @@ fn start_backend<R: Runtime>(app: AppHandle<R>, state: Arc<BackendState>) -> Res
         .app_data_dir()
         .map_err(|error| error.to_string())?;
     std::fs::create_dir_all(data_dir.join("data")).map_err(|error| error.to_string())?;
+    let logs_dir = data_dir.join("logs");
+    std::fs::create_dir_all(&logs_dir).map_err(|error| error.to_string())?;
+    let log_path = logs_dir.join("backend.log");
+    std::fs::write(&log_path, "=== Wow backend start ===\n").map_err(|error| error.to_string())?;
+    state
+        .last_stderr
+        .lock()
+        .expect("backend stderr lock")
+        .clear();
+    state
+        .snapshot
+        .lock()
+        .expect("backend snapshot lock")
+        .log_path = log_path.to_string_lossy().into_owned();
     let script = runtime_script(&app)?;
+    if !script.is_file() {
+        return Err(format!("桌面运行入口不存在：{}", script.display()));
+    }
     let command = app
         .shell()
         .sidecar("node")
         .map_err(|error| error.to_string())?
-        .arg(script.to_string_lossy().to_string())
+        // Windows 安装路径可能包含盘符、反斜杠和空格。不要把绝对路径
+        // 传入 Node；内嵌启动器会根据 sidecar 自身位置寻找运行资源。
+        .arg("--eval")
+        .arg(NODE_RUNTIME_BOOTSTRAP)
         .current_dir(data_dir)
         .env("WOW_DESKTOP", "1")
         .env("NODE_ENV", "production")
@@ -199,6 +250,7 @@ fn start_backend<R: Runtime>(app: AppHandle<R>, state: Arc<BackendState>) -> Res
         while let Some(event) = events.recv().await {
             match event {
                 CommandEvent::Stdout(bytes) => {
+                    append_backend_log(&log_path, "stdout", &bytes);
                     let line = String::from_utf8_lossy(&bytes);
                     if state.generation.load(Ordering::SeqCst) == generation {
                         if let Some(payload) = line.trim().strip_prefix("WOW_ORIGIN_READY:") {
@@ -208,17 +260,24 @@ fn start_backend<R: Runtime>(app: AppHandle<R>, state: Arc<BackendState>) -> Res
                                         state: "ready".into(),
                                         base_url: format!("http://127.0.0.1:{port}"),
                                         error: String::new(),
+                                        log_path: log_path.to_string_lossy().into_owned(),
                                     };
                             }
                         }
                     }
                 }
                 CommandEvent::Stderr(bytes) => {
+                    append_backend_log(&log_path, "stderr", &bytes);
+                    capture_stderr(&state, &bytes);
                     eprintln!("{}", String::from_utf8_lossy(&bytes));
                 }
                 CommandEvent::Error(error) => {
                     if state.generation.load(Ordering::SeqCst) == generation {
-                        set_failed(&state, error);
+                        append_backend_log(&log_path, "error", error.as_bytes());
+                        set_failed(
+                            &state,
+                            format!("{error}\n日志文件：{}", log_path.display()),
+                        );
                     }
                 }
                 CommandEvent::Terminated(status) => {
@@ -230,7 +289,21 @@ fn start_backend<R: Runtime>(app: AppHandle<R>, state: Arc<BackendState>) -> Res
                         }
                     }
                     if is_current && !state.exiting.load(Ordering::SeqCst) {
-                        set_failed(&state, format!("本地代理已退出（状态：{:?}）", status.code));
+                        let stderr = state
+                            .last_stderr
+                            .lock()
+                            .expect("backend stderr lock")
+                            .trim()
+                            .to_owned();
+                        let reason = if stderr.is_empty() {
+                            format!("本地代理已退出（状态：{:?}）", status.code)
+                        } else {
+                            format!("本地代理启动失败：\n{stderr}")
+                        };
+                        set_failed(
+                            &state,
+                            format!("{reason}\n日志文件：{}", log_path.display()),
+                        );
                     }
                     break;
                 }
