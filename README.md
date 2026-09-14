@@ -36,6 +36,14 @@ macOS:   ~/Library/Application Support/com.anomi-oo.woworigin/data
 
 首版安装包未签名。Windows 可能显示 SmartScreen 提示；macOS 可能需要在“系统设置 → 隐私与安全性”中允许打开。
 
+如果 macOS 提示“Wow.app 已损坏，无法打开”，请先将 `Wow.app` 拖入“应用程序”目录，然后打开“终端”执行：
+
+```bash
+xattr -d com.apple.quarantine /Applications/Wow.app
+```
+
+执行完成后重新打开 Wow。
+
 ### Docker 部署
 
 #### 环境要求

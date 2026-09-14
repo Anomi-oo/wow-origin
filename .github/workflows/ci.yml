@@ -122,6 +122,5 @@ jobs:
             gh release create "$GITHUB_REF_NAME" release-assets/* \
               --repo "$GITHUB_REPOSITORY" \
               --title "Wow ${GITHUB_REF_NAME#v}" \
-              --generate-notes \
-              --notes "安装包暂未签名。Windows 可能显示 SmartScreen 提示，macOS 可能需要在系统设置中允许打开。"
+              --generate-notes
           fi
