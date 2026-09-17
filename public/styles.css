@@ -4,6 +4,7 @@ body { margin:0; min-width:320px; min-height:100vh; background:radial-gradient(c
 button,input,select { font:inherit; }
 button { cursor:pointer; }
 .hidden { display:none !important; }
+html:not(.tauri) .tauri-only { display:none !important; }
 .splash { min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; text-align:center; padding:24px; }
 .splash h1 { margin:4px 0 0; font-size:32px; }
 .splash p { color:var(--muted); margin:0 0 8px; }

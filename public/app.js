@@ -7,6 +7,10 @@
 
   function isTauri() { return Boolean(window.__TAURI__?.core?.invoke); }
   document.documentElement.classList.toggle('tauri', isTauri());
+  function initialPage() {
+    if (!isTauri()) return 'login';
+    return location.pathname === '/login' || location.hash === '#login' ? 'login' : 'home';
+  }
   function apiUrl(path) { return `${state.apiBase}${path}`; }
   async function request(path, options = {}) {
     const response = await fetch(apiUrl(path), options);
@@ -33,7 +37,7 @@
 
   async function initializeBackend() {
     $('retry-backend').classList.add('hidden');
-    $('splash-message').textContent = '正在启动本地代理…';
+    $('splash-message').textContent = isTauri() ? '正在启动本地代理…' : '正在加载登录页面…';
     try {
       if (isTauri()) {
         let backend;
@@ -45,13 +49,13 @@
         }
         if (!backend || backend.state !== 'ready') throw new Error('本地代理启动超时');
         state.apiBase = backend.baseUrl;
+        state.status = await request('/app/api/status');
+        renderHome();
+        await loadDesktopAccounts();
       }
-      state.status = await request('/app/api/status');
-      renderHome();
-      if (isTauri()) await loadDesktopAccounts();
       $('splash').classList.add('hidden');
       $('app-shell').classList.remove('hidden');
-      navigate(location.pathname === '/login' || location.hash === '#login' ? 'login' : 'home', false);
+      navigate(initialPage(), false);
     } catch (error) {
       $('splash-message').textContent = error.message || '启动失败';
       if (isTauri()) $('retry-backend').classList.remove('hidden');
@@ -77,6 +81,7 @@
   }
 
   function navigate(page, updateLocation = true) {
+    if (!isTauri() && page === 'home') page = 'login';
     state.page = page;
     document.body.dataset.page = page;
     $('home-page').classList.toggle('hidden', page !== 'home');
@@ -146,17 +151,23 @@
     if (isTauri()) loadDesktopAccounts().catch(() => {});
   }
 
+  function selectedOriginHost() {
+    if (!isTauri()) return window.location.origin;
+    const address = state.status?.addresses[Number($('address-select').value) || 0];
+    return address?.host || '';
+  }
+
   async function renderAccountQr() {
-    if (!state.account || !state.status) return;
-    const address = state.status.addresses[Number($('address-select').value) || 0];
-    if (!address) return;
+    if (!state.account) return;
+    const host = selectedOriginHost();
+    if (!host) return;
     const sequence = ++state.accountQrSequence;
     const image = $('account-origin-qr');
     const placeholder = $('account-qr-placeholder');
     image.removeAttribute('src'); placeholder.classList.remove('hidden'); placeholder.textContent = '正在生成二维码…';
     try {
       const data = await jsonRequest('/app/api/origin-qr', 'POST', {
-        host: address.host,
+        host,
         token: state.account.apiAccessKey,
         name: $('account-name').value.trim()
       });
@@ -258,7 +269,7 @@
   }
 
   document.querySelectorAll('.nav-item').forEach((button) => button.addEventListener('click', () => navigate(button.dataset.page)));
-  window.addEventListener('popstate', () => navigate(location.pathname === '/login' ? 'login' : 'home', false));
+  window.addEventListener('popstate', () => navigate(initialPage(), false));
   $('address-select').addEventListener('change', renderSelectedAddress);
   $('copy-host').addEventListener('click', () => copyText($('host-value').textContent, $('copy-host')));
   $('copy-key').addEventListener('click', () => copyText($('account-key').textContent, $('copy-key')));

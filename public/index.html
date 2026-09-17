@@ -18,14 +18,14 @@
     <aside class="sidebar">
       <div class="brand"><span class="brand-mark">W</span><span>Wow</span></div>
       <nav id="main-navigation" aria-label="主导航">
-        <button class="nav-item" data-page="home" type="button">首页</button>
+        <button class="nav-item tauri-only" data-page="home" type="button">首页</button>
         <button class="nav-item" data-page="login" type="button">Login</button>
       </nav>
-      <div class="sidebar-status"><span class="status-dot"></span>本地代理运行中</div>
+      <div class="sidebar-status tauri-only"><span class="status-dot"></span>本地代理运行中</div>
     </aside>
 
     <main class="content">
-      <section id="home-page" class="page">
+      <section id="home-page" class="page tauri-only">
         <header class="page-header">
           <p class="eyebrow">WOW ORIGIN</p>
           <h1>本地音乐代理</h1>
@@ -68,7 +68,6 @@
               <button id="choose-create" class="button primary" type="button">扫码添加新账号</button>
               <button id="choose-update" class="button secondary" type="button">更新已存在账号</button>
             </div>
-            <p class="muted">网页不提供无登录账号的创建入口。如需空 Cookie 配置，请手工编辑 accounts.json。</p>
           </div>
 
           <div id="login-verify" class="login-step hidden">

@@ -52,7 +52,14 @@ describe('login router', () => {
     expect(response.text).toContain('扫码登录')
     expect(response.text).toContain('扫码添加新账号')
     expect(response.text).toContain('更新已存在账号')
-    expect(response.text).toContain('account-config')
+    expect(response.text).toContain('id="account-config" class="login-step hidden"')
+    expect(response.text).toContain('id="account-origin-qr"')
+    expect(response.text).toContain('id="account-name"')
+    expect(response.text).toContain('id="account-stateless"')
+    expect(response.text).toContain('id="account-luoxue"')
+    expect(response.text).toContain('id="add-lx-source"')
+    expect(response.text).toContain('id="save-config"')
+    expect(response.text).not.toContain('网页不提供无登录账号的创建入口')
   })
 
   test('验证已存在账号 key', async () => {
@@ -70,8 +77,24 @@ describe('login router', () => {
       apiAccessKey: 'key-1',
       platform: 'qq',
       accountName: 'QQ',
+      stateless: true,
+      useLuoxue: true,
       lxSource: []
     })
+  })
+
+  test('Web 使用无效 key 时不能进入账号详情', async () => {
+    const workDir = makeWorkDir()
+    const { app } = createApp(workDir, {
+      getPlatform: () => ({ callModule: jest.fn() })
+    })
+
+    const response = await request(app)
+      .post('/login/api/verify-key')
+      .send({ api_access_key: 'missing' })
+      .expect(400)
+
+    expect(response.body.message).toContain('无效')
   })
 
   test('QQ 扫码成功后写回 accounts.json 和 registry', async () => {
