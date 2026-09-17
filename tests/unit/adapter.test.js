@@ -47,7 +47,7 @@ describe('Wow adapter', () => {
     expect(lxResolver.resolveTrackUrl).toHaveBeenCalledWith('qq', 'track-1', 'higher')
   })
 
-  test('存在 cookie 且官方成功时不调用洛雪源', async () => {
+  test('存在 cookie 时仍优先使用洛雪源，避免返回官方 30 秒试听地址', async () => {
     const officialTrackUrl = {
       url: 'https://official.test/song.mp3',
       quality: 'exhigh',
@@ -56,8 +56,15 @@ describe('Wow adapter', () => {
       size: 0
     }
     const officialSpy = jest.spyOn(NeteaseClient.prototype, 'getTrackUrl').mockResolvedValue(officialTrackUrl)
+    const lxTrackUrl = {
+      url: 'https://audio.test/full-song.mp3',
+      quality: 'exhigh',
+      format: 'mp3',
+      bitrate: 320000,
+      size: 0
+    }
     const lxResolver = {
-      resolveTrackUrl: jest.fn()
+      resolveTrackUrl: jest.fn().mockResolvedValue(lxTrackUrl)
     }
     const adapter = createAdapter({
       platform: 'netease',
@@ -68,54 +75,22 @@ describe('Wow adapter', () => {
       favoriteTrackIds: new Set()
     }, lxResolver)
 
-    await expect(adapter.getTrackUrl('track-1', 'higher')).resolves.toEqual(officialTrackUrl)
-    expect(officialSpy).toHaveBeenCalledWith('track-1', 'higher')
-    expect(lxResolver.resolveTrackUrl).not.toHaveBeenCalled()
-  })
-
-  test('存在 cookie 且官方失败时回退到洛雪源', async () => {
-    const officialError = new Error('official failed')
-    jest.spyOn(QQClient.prototype, 'getTrackUrl').mockRejectedValue(officialError)
-    const lxTrackUrl = {
-      url: 'https://audio.test/song.mp3',
-      quality: 'exhigh',
-      format: '',
-      bitrate: 320000,
-      size: 0
-    }
-    const lxResolver = {
-      resolveTrackUrl: jest.fn().mockResolvedValue(lxTrackUrl)
-    }
-    const adapter = createAdapter({
-      platform: 'qq',
-      name: 'QQ',
-      cookie: 'uin=1; qm_keyst=value',
-      apiAccessKey: 'token-1',
-      useLuoxue: true,
-      favoriteTrackIds: new Set()
-    }, lxResolver)
-
     await expect(adapter.getTrackUrl('track-1', 'higher')).resolves.toEqual(lxTrackUrl)
-    expect(lxResolver.resolveTrackUrl).toHaveBeenCalledWith('qq', 'track-1', 'higher')
+    expect(lxResolver.resolveTrackUrl).toHaveBeenCalledWith('netease', 'track-1', 'higher')
+    expect(officialSpy).not.toHaveBeenCalled()
   })
 
-  test('存在 cookie 且官方返回无效 URL 时回退到洛雪源', async () => {
-    jest.spyOn(QQClient.prototype, 'getTrackUrl').mockResolvedValue({
-      url: '',
+  test('存在 cookie 且洛雪源无结果时回退到官方地址', async () => {
+    const officialTrackUrl = {
+      url: 'https://official.test/song.mp3',
       quality: 'exhigh',
       format: 'mp3',
       bitrate: 320000,
       size: 0
-    })
-    const lxTrackUrl = {
-      url: 'https://audio.test/song.mp3',
-      quality: 'exhigh',
-      format: '',
-      bitrate: 320000,
-      size: 0
     }
+    const officialSpy = jest.spyOn(QQClient.prototype, 'getTrackUrl').mockResolvedValue(officialTrackUrl)
     const lxResolver = {
-      resolveTrackUrl: jest.fn().mockResolvedValue(lxTrackUrl)
+      resolveTrackUrl: jest.fn().mockResolvedValue(undefined)
     }
     const adapter = createAdapter({
       platform: 'qq',
@@ -126,7 +101,42 @@ describe('Wow adapter', () => {
       favoriteTrackIds: new Set()
     }, lxResolver)
 
-    await expect(adapter.getTrackUrl('track-1', 'higher')).resolves.toEqual(lxTrackUrl)
+    await expect(adapter.getTrackUrl('track-1', 'higher')).resolves.toEqual(officialTrackUrl)
+    expect(lxResolver.resolveTrackUrl).toHaveBeenCalledWith('qq', 'track-1', 'higher')
+    expect(officialSpy).toHaveBeenCalledWith('track-1', 'higher')
+    expect(lxResolver.resolveTrackUrl.mock.invocationCallOrder[0]).toBeLessThan(officialSpy.mock.invocationCallOrder[0])
+  })
+
+  test('存在 cookie 且洛雪源返回无效 URL 时回退到官方地址', async () => {
+    const officialTrackUrl = {
+      url: 'https://official.test/song.mp3',
+      quality: 'exhigh',
+      format: 'mp3',
+      bitrate: 320000,
+      size: 0
+    }
+    jest.spyOn(QQClient.prototype, 'getTrackUrl').mockResolvedValue(officialTrackUrl)
+    jest.spyOn(console, 'warn').mockImplementation(() => {})
+    const invalidLxTrackUrl = {
+      url: '',
+      quality: 'exhigh',
+      format: '',
+      bitrate: 320000,
+      size: 0
+    }
+    const lxResolver = {
+      resolveTrackUrl: jest.fn().mockResolvedValue(invalidLxTrackUrl)
+    }
+    const adapter = createAdapter({
+      platform: 'qq',
+      name: 'QQ',
+      cookie: 'uin=1; qm_keyst=value',
+      apiAccessKey: 'token-1',
+      useLuoxue: true,
+      favoriteTrackIds: new Set()
+    }, lxResolver)
+
+    await expect(adapter.getTrackUrl('track-1', 'higher')).resolves.toEqual(officialTrackUrl)
   })
 
   test('官方和洛雪源都失败时重新抛出原始官方错误', async () => {

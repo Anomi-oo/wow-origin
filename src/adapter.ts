@@ -50,28 +50,10 @@ export function createAdapter(
     return undefined;
   };
 
-  if (!account.cookie.trim()) {
-    client.getTrackUrl = async (id: string, quality?: string) => {
-      const lxTrackUrl = await getLxTrackUrl(id, quality);
-      if (lxTrackUrl) return lxTrackUrl;
-      return defaultGetTrackUrl(id, quality);
-    };
-    return client;
-  }
-
   client.getTrackUrl = async (id: string, quality?: string) => {
-    let officialError: unknown;
-    try {
-      const officialTrackUrl = await defaultGetTrackUrl(id, quality);
-      if (hasValidAudioUrl(officialTrackUrl)) return officialTrackUrl;
-      throw new Error('Official platform returned an invalid audio URL');
-    } catch (error) {
-      officialError = error;
-    }
-
     const lxTrackUrl = await getLxTrackUrl(id, quality);
     if (lxTrackUrl) return lxTrackUrl;
-    throw officialError;
+    return defaultGetTrackUrl(id, quality);
   };
   return client;
 }
