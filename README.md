@@ -4,7 +4,7 @@
 
 Aduoer Wow Origin 是一个基于 Node.js 与 TypeScript 的多平台音乐 API 服务，为 Aduoer 客户端提供统一的 Wow v1 接口，并兼容网易云音乐、QQ 音乐的部分上游接口。
 
-Docker 仍是主要部署方式；项目同时提供 Windows 和 Apple Silicon macOS 桌面安装包，适合没有服务器但有常开电脑的用户。
+推荐直接部署到 Cloudflare Workers：不需要服务器或 Docker，免费套餐即可开始使用。项目也提供 Docker 和 Windows / Apple Silicon macOS 桌面部署方式。
 
 ## 功能
 
@@ -15,36 +15,42 @@ Docker 仍是主要部署方式；项目同时提供 Windows 和 Apple Silicon m
 - 可选接入洛雪自定义源，为 `/v1/track/url` 提供播放地址回退
 - 提供缓存、并发限制、结构化错误和自动化测试
 
-## 使用文档
+## 部署方式
 
-### 桌面版
+推荐顺序：Cloudflare Workers → Docker → 桌面版。
 
-从 GitHub Release 下载 Windows x64 的 `.exe` 或 Apple Silicon macOS 的 `.dmg`。桌面版已经内置 Node.js，不需要另外安装 Node 或 Docker。
+### 1. Cloudflare Workers（推荐）
 
-- 应用默认监听 `23231`；端口被占用时会自动选择空闲端口，实际地址以首页显示为准。
-- 关闭窗口后代理继续在系统托盘运行；通过托盘中的“退出”才会停止代理。
-- 首页可以选择电脑的局域网 IPv4 地址，并生成 Aduoer 快捷添加源二维码。二维码中的 Token 留空，扫码后需要手动填写账号的 `api_access_key`。
-- 点击左侧的“Login”即可登录或管理账号；也可以在浏览器打开首页显示地址后的 `/login`，例如 `http://192.168.1.8:23231/login`。
-- Login 页面只能通过扫码新增真实账号，或通过已有 `api_access_key` 管理配置；无 Cookie 账号仍需手工编辑配置文件。
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Anomi-oo/wow-origin)
 
-桌面版数据保存在系统应用数据目录的 `data/` 子目录中。常见位置如下：
+点击按钮并授权 Cloudflare 后即可创建 Worker。该方式使用原生 Workers、静态资源和 SQLite Durable Object，不使用 Cloudflare Containers，也不需要另外购买服务器或数据库。
 
-```text
-Windows: %APPDATA%\com.anomi-oo.woworigin\data
-macOS:   ~/Library/Application Support/com.anomi-oo.woworigin/data
-```
+如需使用洛雪源，在部署页面的 **Build variables and secrets（构建变量）** 中设置：
 
-首版安装包未签名。Windows 可能显示 SmartScreen 提示；macOS 可能需要在“系统设置 → 隐私与安全性”中允许打开。
+| 变量 | 必填 | 说明 |
+| --- | --- | --- |
+| `CF_LX_SOURCE_URL` | 否 | 唯一的全局洛雪源 HTTP(S) 地址 |
 
-如果 macOS 提示“Wow.app 已损坏，无法打开”，请先将 `Wow.app` 拖入“应用程序”目录，然后打开“终端”执行：
+构建会下载该地址、进行基础校验并自动计算 SHA-256，然后把脚本静态编译进 **Cloudflare 专用 bundle**。用户不需要提供 hash。普通 Node、Docker 和桌面构建不会包含它。
+
+Cloudflare 部署有以下差异：
+
+- 只支持一个全局洛雪源；账号独立 `lxSource` 在界面和服务端都被禁用。
+- 不在请求时下载脚本，也不使用 `eval`；修改源地址或更新源内容后必须重新部署。
+- 账号保存在 Cloudflare 自动创建的 Durable Object SQLite 中，无需 PostgreSQL 或数据库 ID。
+- 免费套餐存在请求数、CPU 时间和存储配额，具体以 Cloudflare 当前套餐为准。
+- 每天 01:00（Asia/Shanghai）通过 Cron Trigger 刷新账号登录态；洛雪源更新则通过重新部署完成。
+
+本地验证或命令行部署：
 
 ```bash
-xattr -d com.apple.quarantine /Applications/Wow.app
+npm ci
+CF_LX_SOURCE_URL="https://example.com/source.js" npm run cloudflare:deploy
 ```
 
-执行完成后重新打开 Wow。
+不使用洛雪源时省略 `CF_LX_SOURCE_URL` 即可。
 
-### Docker 部署
+### 2. Docker 部署
 
 #### 环境要求
 
@@ -143,6 +149,28 @@ docker compose down
 
 服务默认监听 `http://localhost:3000`，账号数据和洛雪源缓存保存在宿主机的 `data/` 目录中。
 
+### 3. 桌面版
+
+从 GitHub Release 下载 Windows x64 的 `.exe` 或 Apple Silicon macOS 的 `.dmg`。桌面版已经内置 Node.js，不需要另外安装 Node 或 Docker。
+
+- 应用默认监听 `23231`；端口被占用时会自动选择空闲端口，实际地址以首页显示为准。
+- 关闭窗口后代理继续在系统托盘运行；通过托盘中的“退出”才会停止代理。
+- 首页可以选择电脑的局域网 IPv4 地址，并生成 Aduoer 快捷添加源二维码。
+- 点击左侧的“Login”即可登录或管理账号；也可以在浏览器打开首页显示地址后的 `/login`。
+
+桌面版数据保存在系统应用数据目录的 `data/` 子目录中：
+
+```text
+Windows: %APPDATA%\com.anomi-oo.woworigin\data
+macOS:   ~/Library/Application Support/com.anomi-oo.woworigin/data
+```
+
+首版安装包未签名。Windows 可能显示 SmartScreen 提示。macOS 若提示应用已损坏，请将 `Wow.app` 拖入“应用程序”后执行：
+
+```bash
+xattr -d com.apple.quarantine /Applications/Wow.app
+```
+
 ### 登录账号
 
 服务启动后，在浏览器中打开登录页面：
@@ -161,13 +189,15 @@ http://192.168.1.8:3000/login
 
 首次添加账号时选择平台并扫码；扫码成功后会创建账号、显示生成的 `api_access_key`，并进入账号配置页面。更新已有账号时输入 `api_access_key` 即可直接修改名称、无状态模式和洛雪源配置，不需要重新扫码；只有刷新 Cookie 时才需要再次扫码。
 
-登录成功后，服务会更新内存中的账号会话，并把 Cookie 写回 `data/accounts.json`。该文件包含登录凭据，不应提交到 Git、发送给他人或放入公开镜像。网页不提供无 Cookie 账号的创建入口，此类账号只能手工写入 `accounts.json`。
+登录成功后，服务会更新内存中的账号会话，并把 Cookie 写入账号数据库。Docker、Node 和桌面版使用 `data/wow-origin.sqlite`；Cloudflare 使用 Durable Object SQLite。数据库包含登录凭据，不应提交到 Git、发送给他人或放入公开镜像。
+
+为了兼容旧版本，本地启动时若 SQLite 账号表为空且存在 `data/accounts.json`，会自动导入一次。导入后 SQLite 是唯一数据源，继续修改 JSON 不会生效。备份本地部署时请备份 `data/wow-origin.sqlite`（并同时保留其 `-wal`、`-shm` 文件，或先停止服务再复制数据库）。
 
 ### API 使用
 
 #### Wow v1 API
 
-`/v1/*` 使用 `Authorization` 请求头认证。令牌对应 `data/accounts.json` 中的 `api_access_key`，并由服务端决定使用哪个平台账号。
+`/v1/*` 使用 `Authorization` 请求头认证。令牌对应账号数据库中的 `api_access_key`，并由服务端决定使用哪个平台账号。
 
 ```bash
 # 服务状态和能力
@@ -223,6 +253,8 @@ curl "http://localhost:3000/toplist?platform=qqmusic"
 | `LX_SOURCE_URL` | 空 | 主洛雪自定义源 URL |
 | `LX_SOURCE_URL0` 至 `LX_SOURCE_URL9` | 空 | 按编号依次尝试的备用源 URL |
 
+以上洛雪变量只用于 Node、Docker 和桌面版。Cloudflare 只读取构建阶段的 `CF_LX_SOURCE_URL`。
+
 洛雪源仅接管 `/v1/track/url` 的播放地址解析。自定义源 JavaScript 会作为运维可信代码在独立 Worker 中运行，但 Worker 不是安全沙箱，请勿配置未经审核或由用户提交的源地址。
 
 账号配置了 `lxSource` 时，解析顺序为账号源、全局环境变量源；账号源失败后仍会尝试全局源。`useLuoxue` 为 `false` 时不会调用任何洛雪源。
@@ -231,7 +263,7 @@ curl "http://localhost:3000/toplist?platform=qqmusic"
 
 ### 安全说明
 
-- `.env`、`data/accounts.json`、`data/lx-sources/` 已加入 `.gitignore`。
+- `.env`、本地账号数据库、旧 `data/accounts.json`、`data/lx-sources/` 和 `cloudflare/generated/` 已加入 `.gitignore`。
 - 桌面安装包不会内置本机账号数据；账号 Cookie 只写入系统应用数据目录。
 - Docker 构建上下文会排除 `.env` 和整个 `data/` 目录，账号 Cookie 不会被写入镜像。
 - 不要在源码、Issue、日志或截图中公开 Cookie、`api_access_key`、访问令牌和自定义源私有地址。
@@ -283,10 +315,12 @@ wow-origin/
 ├── util/                   # 通用工具
 ├── tests/                  # 单元测试和集成测试
 ├── public/                 # 首页与账号管理页面
+├── cloudflare/             # Worker、DO SQLite 与 CF 专用静态打包流程
 ├── src-tauri/              # Tauri 桌面壳、托盘和 sidecar 生命周期
 ├── scripts/                # 桌面运行时准备脚本
 ├── data/
 │   └── accounts.example.json
+├── wrangler.jsonc
 ├── Dockerfile
 ├── docker-compose.yml
 └── package.json

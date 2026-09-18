@@ -4,6 +4,8 @@ dist/
 data/*
 !data/.gitkeep
 !data/accounts.example.json
+cloudflare/generated/
+.wrangler/
 
 # 测试覆盖率报告
 coverage/

@@ -1,7 +1,7 @@
-import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
 import type { MusicPlatform } from './types';
+import { createLocalAccountStore, type AccountStore } from './storage/accounts';
 
 export interface RawMusicAccount {
   platform?: unknown;
@@ -162,31 +162,10 @@ export function accountsFilePath(workDir: string = process.cwd()): string {
   return path.join(workDir, 'data', 'accounts.json');
 }
 
-function readRawAccountsForWrite(workDir: string, allowMissing: boolean = false): { filePath: string; rawAccounts: RawMusicAccount[] } {
-  const filePath = accountsFilePath(workDir);
+export type AccountStoreInput = string | AccountStore;
 
-  if (!fs.existsSync(filePath)) {
-    if (!allowMissing) {
-      throw new Error('accounts.json 不存在');
-    }
-    fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    return { filePath, rawAccounts: [] };
-  }
-
-  const content = fs.readFileSync(filePath, 'utf8');
-  const rawAccounts: unknown = content.trim() ? JSON.parse(content) : [];
-  if (!Array.isArray(rawAccounts)) {
-    throw new Error('accounts.json 必须是数组');
-  }
-
-  return { filePath, rawAccounts: rawAccounts as RawMusicAccount[] };
-}
-
-function writeRawAccounts(filePath: string, rawAccounts: RawMusicAccount[]): void {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  const tempFilePath = `${filePath}.tmp`;
-  fs.writeFileSync(tempFilePath, `${JSON.stringify(rawAccounts, null, 2)}\n`, 'utf8');
-  fs.renameSync(tempFilePath, filePath);
+function resolveAccountStore(input: AccountStoreInput = process.cwd()): AccountStore {
+  return typeof input === 'string' ? createLocalAccountStore(input) : input;
 }
 
 function collectAccountKeys(registry: AccountSessionRegistry, rawAccounts: RawMusicAccount[]): Set<string> {
@@ -201,9 +180,9 @@ function collectAccountKeys(registry: AccountSessionRegistry, rawAccounts: RawMu
 
 export function generateAccountAccessKey(
   registry: AccountSessionRegistry,
-  workDir: string = process.cwd()
+  storeInput: AccountStoreInput = process.cwd()
 ): string {
-  const { rawAccounts } = readRawAccountsForWrite(workDir, true);
+  const rawAccounts = resolveAccountStore(storeInput).list();
   const existingKeys = collectAccountKeys(registry, rawAccounts);
 
   for (let index = 0; index < 10; index += 1) {
@@ -225,45 +204,17 @@ export function extractAuthorizationToken(value: string | undefined): string {
  * 读取并校验 v1 多账号配置。配置异常只记录日志并返回空 registry，
  * 避免账号配置问题阻止服务启动。
  */
-export function loadAccountSessions(workDir: string = process.cwd()): AccountSessionRegistry {
-  const filePath = accountsFilePath(workDir);
+export function loadAccountSessions(storeInput: AccountStoreInput = process.cwd()): AccountSessionRegistry {
   const emptyRegistry: AccountSessionRegistry = { sessions: [], byAccessKey: new Map() };
-
-  if (!fs.existsSync(filePath)) {
-    console.error(`[accounts] accounts.json 不存在: ${filePath}`);
-    printTemplate();
-    return emptyRegistry;
-  }
-
-  let content = '';
-  try {
-    content = fs.readFileSync(filePath, 'utf8');
-  } catch (error) {
-    console.error(`[accounts] 读取 accounts.json 失败: ${filePath}`, error);
-    printTemplate();
-    return emptyRegistry;
-  }
-
-  if (!content.trim()) {
-    console.error(`[accounts] accounts.json 内容为空: ${filePath}`);
-    printTemplate();
-    return emptyRegistry;
-  }
-
   let rawAccounts: unknown;
   try {
-    rawAccounts = JSON.parse(content);
+    rawAccounts = resolveAccountStore(storeInput).list();
   } catch (error) {
-    console.error(`[accounts] accounts.json JSON 解析失败: ${filePath}`, error);
+    console.error('[accounts] 读取账号数据库失败', error);
     printTemplate();
     return emptyRegistry;
   }
-
-  if (!Array.isArray(rawAccounts)) {
-    console.error(`[accounts] accounts.json 必须是数组: ${filePath}`);
-    printTemplate();
-    return emptyRegistry;
-  }
+  if (!Array.isArray(rawAccounts)) return emptyRegistry;
 
   const parsedSessions: MusicAccountSession[] = [];
   const keyCounts = new Map<string, number>();
@@ -324,14 +275,14 @@ export function loadAccountSessions(workDir: string = process.cwd()): AccountSes
 
 /**
  * 按 api_access_key 更新账号 cookie，并同步刷新内存 registry。
- * 登录入口依赖这个函数把扫码结果持久化到 data/accounts.json。
+ * 登录入口依赖这个函数把扫码结果持久化到账号数据库。
  */
 export function updateAccountCookieByAccessKey(
   apiAccessKey: string,
   platformValue: unknown,
   cookie: string,
   registry: AccountSessionRegistry,
-  workDir: string = process.cwd()
+  storeInput: AccountStoreInput = process.cwd()
 ): UpdateAccountCookieResult {
   const token = String(apiAccessKey || '').trim();
   if (!token) {
@@ -341,7 +292,7 @@ export function updateAccountCookieByAccessKey(
   const platform = normalizeAccountPlatform(platformValue);
   const session = registry.byAccessKey.get(token);
   if (!session) {
-    throw new Error('api_access_key 无效或未注册到 accounts.json');
+    throw new Error('api_access_key 无效或未注册到账号数据库');
   }
   if (session.platform !== platform) {
     throw new Error('更新已有账号时不能修改平台');
@@ -352,7 +303,8 @@ export function updateAccountCookieByAccessKey(
     throw new Error('登录成功但未获取到有效 cookie');
   }
 
-  const { filePath, rawAccounts } = readRawAccountsForWrite(workDir);
+  const store = resolveAccountStore(storeInput);
+  const rawAccounts = store.list();
 
   const target = rawAccounts.find((raw) => {
     if (!raw || typeof raw !== 'object') return false;
@@ -361,34 +313,33 @@ export function updateAccountCookieByAccessKey(
   });
 
   if (!target || typeof target !== 'object') {
-    throw new Error('accounts.json 中未找到对应 api_access_key');
+    throw new Error('账号数据库中未找到对应 api_access_key');
   }
 
   const account = target as RawMusicAccount;
   const storedPlatform = normalizeAccountPlatform(account.platform);
   if (storedPlatform !== session.platform) {
-    throw new Error('accounts.json 中账号平台与当前会话不一致');
+    throw new Error('账号数据库中账号平台与当前会话不一致');
   }
   account.cookie = normalizedCookie;
-
-  writeRawAccounts(filePath, rawAccounts);
+  store.update(token, { cookie: normalizedCookie });
 
   session.cookie = normalizedCookie;
   registry.byAccessKey.set(token, session);
 
-  return { session, filePath };
+  return { session, filePath: store.location };
 }
 
 /**
  * 新增扫码登录账号，并把生成好的 api_access_key、cookie、昵称同时写入
- * data/accounts.json 和当前进程内的账号 registry。
+ * 账号数据库和当前进程内的账号 registry。
  */
 export function createAccountWithCookie(
   apiAccessKey: string,
   platformValue: unknown,
   cookie: string,
   registry: AccountSessionRegistry,
-  workDir: string = process.cwd(),
+  storeInput: AccountStoreInput = process.cwd(),
   accountName?: string
 ): CreateAccountResult {
   const token = String(apiAccessKey || '').trim();
@@ -405,7 +356,8 @@ export function createAccountWithCookie(
     throw new Error('登录成功但未获取到有效 cookie');
   }
 
-  const { filePath, rawAccounts } = readRawAccountsForWrite(workDir, true);
+  const store = resolveAccountStore(storeInput);
+  const rawAccounts = store.list();
   const existingKeys = collectAccountKeys(registry, rawAccounts);
   if (existingKeys.has(token)) {
     throw new Error('api_access_key 已存在');
@@ -422,8 +374,7 @@ export function createAccountWithCookie(
     useLuoxue: true,
     lxSource: []
   };
-  rawAccounts.push(account);
-  writeRawAccounts(filePath, rawAccounts);
+  store.insert(account);
 
   const session: MusicAccountSession = {
     platform,
@@ -438,7 +389,7 @@ export function createAccountWithCookie(
   registry.sessions.push(session);
   registry.byAccessKey.set(token, session);
 
-  return { session, filePath };
+  return { session, filePath: store.location };
 }
 
 /** 更新网页可编辑的账号配置，不允许借此修改平台、Cookie 或访问密钥。 */
@@ -446,12 +397,12 @@ export function updateAccountConfigByAccessKey(
   apiAccessKey: string,
   input: UpdateAccountConfigInput,
   registry: AccountSessionRegistry,
-  workDir: string = process.cwd()
+  storeInput: AccountStoreInput = process.cwd()
 ): UpdateAccountCookieResult {
   const token = String(apiAccessKey || '').trim();
   if (!token) throw new Error('api_access_key 是必填参数');
   const session = registry.byAccessKey.get(token);
-  if (!session) throw new Error('api_access_key 无效或未注册到 accounts.json');
+  if (!session) throw new Error('api_access_key 无效或未注册到账号数据库');
 
   if (typeof input.name !== 'string') throw new Error('名称必须是字符串');
   const name = input.name.trim();
@@ -461,21 +412,22 @@ export function updateAccountConfigByAccessKey(
   if (typeof input.useLuoxue !== 'boolean') throw new Error('useLuoxue 必须是 boolean');
   const lxSource = normalizeAccountLxSources(input.lxSource);
 
-  const { filePath, rawAccounts } = readRawAccountsForWrite(workDir);
+  const store = resolveAccountStore(storeInput);
+  const rawAccounts = store.list();
   const target = rawAccounts.find((raw) => (
     raw && typeof raw === 'object' && String(raw.api_access_key || '').trim() === token
   ));
-  if (!target) throw new Error('accounts.json 中未找到对应 api_access_key');
+  if (!target) throw new Error('账号数据库中未找到对应 api_access_key');
 
   target.name = name;
   target.stateless = input.stateless;
   target.useLuoxue = input.useLuoxue;
   target.lxSource = lxSource;
-  writeRawAccounts(filePath, rawAccounts);
+  store.update(token, { name, stateless: input.stateless, useLuoxue: input.useLuoxue, lxSource });
 
   session.name = name;
   session.stateless = input.stateless;
   session.useLuoxue = input.useLuoxue;
   session.lxSource = lxSource;
-  return { session, filePath };
+  return { session, filePath: store.location };
 }

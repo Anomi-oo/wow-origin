@@ -1,4 +1,5 @@
 import {
+  type AccountStoreInput,
   type AccountSessionRegistry,
   updateAccountCookieByAccessKey
 } from './accounts';
@@ -23,6 +24,7 @@ interface LoginRefreshOptions {
   registry: AccountSessionRegistry;
   platformFactory: PlatformFactoryLike;
   workDir?: string;
+  accountStore?: AccountStoreInput;
   logger?: any;
 }
 
@@ -98,6 +100,7 @@ export async function refreshLoginSessions({
   registry,
   platformFactory,
   workDir = process.cwd(),
+  accountStore,
   logger = new Logger({ component: 'login-refresh' })
 }: LoginRefreshOptions): Promise<LoginRefreshSummary> {
   const sessions = registry.sessions.filter((session) => session.cookie.trim());
@@ -158,7 +161,7 @@ export async function refreshLoginSessions({
         session.platform,
         refreshedCookie,
         registry,
-        workDir
+        accountStore ?? workDir
       );
 
       summary.refreshed += 1;

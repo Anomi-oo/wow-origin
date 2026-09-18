@@ -52,6 +52,9 @@
         state.status = await request('/app/api/status');
         renderHome();
         await loadDesktopAccounts();
+      } else {
+        state.status = await request('/app/api/status');
+        applyRuntimeCapabilities();
       }
       $('splash').classList.add('hidden');
       $('app-shell').classList.remove('hidden');
@@ -145,6 +148,7 @@
     $('account-platform').textContent = account.platform === 'qq' ? 'QQ 音乐' : '网易云音乐';
     $('account-key').textContent = account.apiAccessKey; $('account-name').value = account.name || account.accountName || '';
     $('account-stateless').checked = Boolean(account.stateless); $('account-luoxue').checked = account.useLuoxue !== false;
+    applyRuntimeCapabilities();
     renderSources(Array.isArray(account.lxSource) ? account.lxSource : []); $('config-message').textContent = '';
     showStep('account-config');
     renderAccountQr();
@@ -211,7 +215,7 @@
     const list = $('desktop-account-list');
     let accounts;
     try {
-      accounts = await window.__TAURI__.core.invoke('list_accounts');
+      accounts = await request('/app/api/accounts');
     } catch (error) {
       list.replaceChildren();
       const message = document.createElement('span'); message.className = 'account-nav-empty'; message.textContent = '账号列表读取失败'; list.append(message);
@@ -229,6 +233,10 @@
       button.addEventListener('click', () => openDesktopAccount(account.apiAccessKey)); list.append(button);
     });
     updateAccountNavigationActive();
+  }
+  function applyRuntimeCapabilities() {
+    const supported = state.status?.accountLxSources !== false;
+    $('account-lx-source-settings').classList.toggle('hidden', !supported);
   }
 
   async function openDesktopAccount(apiAccessKey) {
@@ -255,7 +263,9 @@
   async function saveConfig() {
     const button = $('save-config'); setBusy(button, true, '正在保存…'); $('config-message').className = 'message';
     try {
-      const lxSource = [...document.querySelectorAll('#lx-source-list input')].map((input) => input.value.trim()).filter(Boolean);
+      const lxSource = state.status?.accountLxSources === false
+        ? []
+        : [...document.querySelectorAll('#lx-source-list input')].map((input) => input.value.trim()).filter(Boolean);
       const account = await jsonRequest('/login/api/account/config', 'PUT', {
         api_access_key: state.account.apiAccessKey, name: $('account-name').value.trim(),
         stateless: $('account-stateless').checked, useLuoxue: $('account-luoxue').checked, lxSource

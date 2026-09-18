@@ -109,7 +109,11 @@ const createRequest = (uri, data, options) => {
       .then((res) => {
         const body = res.data
         // 将 Set-Cookie 数组转换为 JSON 对象
-        const cookieArray = (res.headers['set-cookie'] || []).map((x) =>
+        const setCookieHeader = res.headers['set-cookie']
+        const setCookieValues = Array.isArray(setCookieHeader)
+          ? setCookieHeader
+          : typeof setCookieHeader === 'string' ? [setCookieHeader] : []
+        const cookieArray = setCookieValues.map((x) =>
           x.replace(/\s*Domain=[^(;|$)]+;*/, ''),
         )
         answer.cookie = {}

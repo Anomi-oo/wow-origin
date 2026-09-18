@@ -10,11 +10,17 @@ const {
   updateAccountConfigByAccessKey,
   updateAccountCookieByAccessKey
 } = require('../../../dist/accounts')
+const { createLocalAccountStore, sqliteAccountsFilePath } = require('../../../dist/storage')
 
 function makeWorkDir() {
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'music-api-accounts-'))
   fs.mkdirSync(path.join(workDir, 'data'), { recursive: true })
   return workDir
+}
+
+function readAccounts(workDir) {
+  const store = createLocalAccountStore(workDir)
+  try { return store.list() } finally { store.close() }
 }
 
 describe('v1 accounts', () => {
@@ -41,24 +47,25 @@ describe('v1 accounts', () => {
     expect(extractAuthorizationToken('')).toBe('')
   })
 
-  test('缺失 accounts.json 时返回空 registry 并打印模板', () => {
-    const registry = loadAccountSessions(makeWorkDir())
+  test('缺失 accounts.json 时创建空 SQLite 账号库', () => {
+    const workDir = makeWorkDir()
+    const registry = loadAccountSessions(workDir)
 
     expect(registry.sessions).toHaveLength(0)
-    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('accounts.json 不存在'))
-    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('accounts.json 配置模板'))
+    expect(fs.existsSync(sqliteAccountsFilePath(workDir))).toBe(true)
+    expect(errorSpy).not.toHaveBeenCalled()
   })
 
-  test('空文件和 JSON 解析失败不阻止加载', () => {
+  test('空旧文件和 JSON 迁移失败不阻止加载', () => {
     const emptyDir = makeWorkDir()
     fs.writeFileSync(path.join(emptyDir, 'data', 'accounts.json'), '')
     expect(loadAccountSessions(emptyDir).sessions).toHaveLength(0)
-    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('内容为空'))
+    expect(readAccounts(emptyDir)).toEqual([])
 
     const invalidDir = makeWorkDir()
     fs.writeFileSync(path.join(invalidDir, 'data', 'accounts.json'), '{')
     expect(loadAccountSessions(invalidDir).sessions).toHaveLength(0)
-    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('JSON 解析失败'), expect.any(Error))
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('JSON 迁移失败'), expect.any(Error))
   })
 
   test('忽略缺失或空 api_access_key 的账号', () => {
@@ -167,7 +174,7 @@ describe('v1 accounts', () => {
       registry,
       workDir
     )
-    const saved = JSON.parse(fs.readFileSync(accountsPath, 'utf8'))
+    const saved = readAccounts(workDir)
 
     expect(result.session.cookie).toBe('MUSIC_U=new_cookie')
     expect(result.session.platform).toBe('qq')
@@ -215,7 +222,7 @@ describe('v1 accounts', () => {
       platform: 'qq', name: '新名称', cookie: 'old', stateless: false,
       useLuoxue: true, lxSource: ['https://example.com/a.js']
     })
-    expect(JSON.parse(fs.readFileSync(accountsPath, 'utf8'))[0].lxSource)
+    expect(readAccounts(workDir)[0].lxSource)
       .toEqual(['https://example.com/a.js'])
   })
 
@@ -249,7 +256,7 @@ describe('v1 accounts', () => {
       workDir,
       '网易昵称'
     )
-    const saved = JSON.parse(fs.readFileSync(accountsPath, 'utf8'))
+    const saved = readAccounts(workDir)
 
     expect(result.session).toMatchObject({
       platform: 'netease',
@@ -271,7 +278,7 @@ describe('v1 accounts', () => {
     expect(registry.byAccessKey.get('newkey').name).toBe('网易昵称')
   })
 
-  test('首次扫码时 accounts.json 不存在也会自动创建', () => {
+  test('首次扫码时自动创建 SQLite 账号库', () => {
     const workDir = makeWorkDir()
     const accountsPath = path.join(workDir, 'data', 'accounts.json')
     const registry = { sessions: [], byAccessKey: new Map() }
@@ -285,8 +292,8 @@ describe('v1 accounts', () => {
       '首次扫码账号'
     )
 
-    expect(fs.existsSync(accountsPath)).toBe(true)
-    expect(JSON.parse(fs.readFileSync(accountsPath, 'utf8'))).toEqual([
+    expect(fs.existsSync(sqliteAccountsFilePath(workDir))).toBe(true)
+    expect(readAccounts(workDir)).toEqual([
       expect.objectContaining({
         platform: 'qq',
         name: '首次扫码账号',

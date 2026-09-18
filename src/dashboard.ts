@@ -1,7 +1,8 @@
 import os from 'node:os';
 import type { Request, Response, Router } from 'express';
 import express from 'express';
-import QRCode from 'qrcode';
+import type { AccountSessionRegistry } from './accounts';
+import { qrCodeDataUrl } from './qr';
 
 export interface DashboardAddress {
   ip: string;
@@ -70,8 +71,26 @@ function browserEndpoint(req: Request): { ip: string; port: number } {
   };
 }
 
-export function createDashboardRouter(): Router {
+export function createDashboardRouter(options: {
+  registry?: AccountSessionRegistry;
+  cloudflare?: boolean;
+} = {}): Router {
   const router = express.Router();
+
+  router.get('/accounts', (_req: Request, res: Response) => {
+    if (process.env.WOW_DESKTOP !== '1' || !options.registry) {
+      res.status(404).json({ code: 404, message: 'API endpoint not found', data: null });
+      return;
+    }
+    res.json({
+      code: 200,
+      data: options.registry.sessions.map((session) => ({
+        platform: session.platform,
+        name: session.name,
+        apiAccessKey: session.apiAccessKey
+      }))
+    });
+  });
 
   router.post('/origin-qr', async (req: Request, res: Response, next) => {
     try {
@@ -90,11 +109,7 @@ export function createDashboardRouter(): Router {
         return;
       }
       const { payload, addUrl } = createOriginAddPayload(host, token, name);
-      const qrImage = await QRCode.toDataURL(addUrl, {
-        width: 320,
-        margin: 1,
-        errorCorrectionLevel: 'H'
-      });
+      const qrImage = qrCodeDataUrl(addUrl);
       res.json({ code: 200, data: { payload, addUrl, qrImage } });
     } catch (error) {
       next(error);
@@ -112,18 +127,16 @@ export function createDashboardRouter(): Router {
       const ips = lanAddresses.length > 0 ? lanAddresses : ['127.0.0.1'];
       const addresses: DashboardAddress[] = await Promise.all(ips.map(async (ip) => {
         const renderedIp = ip.includes(':') ? `[${ip}]` : ip;
-        const host = `http://${renderedIp}:${port}`;
+        const host = options.cloudflare
+          ? `https://${req.headers.host || renderedIp}`
+          : `http://${renderedIp}:${port}`;
         const { payload, addUrl } = createOriginAddPayload(host);
         return {
           ip,
           host,
           payload,
           addUrl,
-          qrImage: await QRCode.toDataURL(addUrl, {
-            width: 320,
-            margin: 1,
-            errorCorrectionLevel: 'H'
-          }),
+          qrImage: qrCodeDataUrl(addUrl),
           isLoopback: ip === '127.0.0.1' || ip === 'localhost'
         };
       }));
@@ -132,6 +145,8 @@ export function createDashboardRouter(): Router {
         code: 200,
         data: {
           status: 'running',
+          runtime: options.cloudflare ? 'cloudflare' : desktop ? 'desktop' : 'node',
+          accountLxSources: !options.cloudflare,
           port,
           preferredIp: addresses[0].ip,
           addresses

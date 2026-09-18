@@ -1,8 +1,8 @@
 import path from 'node:path';
 import express, { NextFunction, Request, Response, Router } from 'express';
-import QRCode from 'qrcode';
 import {
   AccountSessionRegistry,
+  type AccountStoreInput,
   createAccountWithCookie,
   generateAccountAccessKey,
   MusicAccountSession,
@@ -12,6 +12,7 @@ import {
 import type { MusicPlatform } from './types';
 import { createMusicClient } from './adapter';
 import { BadRequestError, UpstreamError } from './errors';
+import { qrCodeDataUrl } from './qr';
 
 type ResourcePlatform = 'netease' | 'qqmusic';
 type LoginMode = 'create' | 'update';
@@ -33,6 +34,8 @@ interface LoginRouterOptions {
   registry: AccountSessionRegistry;
   platformFactory: PlatformFactoryLike;
   workDir?: string;
+  accountStore?: AccountStoreInput;
+  allowAccountLxSources?: boolean;
   onAccountsChanged?: () => void;
 }
 
@@ -111,14 +114,14 @@ function normalizeLoginMode(value: unknown): LoginMode {
   throw new BadRequestError('登录模式无效');
 }
 
-function accountData(session: MusicAccountSession) {
+function accountData(session: MusicAccountSession, allowAccountLxSources: boolean = true) {
   return {
     apiAccessKey: session.apiAccessKey,
     platform: session.platform,
     name: session.name,
     stateless: session.stateless,
     useLuoxue: session.useLuoxue,
-    lxSource: session.lxSource
+    lxSource: allowAccountLxSources ? session.lxSource : []
   };
 }
 
@@ -153,10 +156,13 @@ export function createLoginRouter({
   registry,
   platformFactory,
   workDir,
+  accountStore,
+  allowAccountLxSources = true,
   onAccountsChanged
 }: LoginRouterOptions): Router {
   const router = express.Router();
   const pendingLogins = new Map<string, PendingLogin>();
+  const storage = accountStore ?? workDir;
 
   function getPendingLogin(token: unknown): { token: string; pending: PendingLogin } {
     const normalizedToken = String(token || '').trim();
@@ -171,7 +177,7 @@ export function createLoginRouter({
   router.post('/api/verify-key', (req: Request, res: Response, next: NextFunction) => {
     try {
       const session = requireAccount(registry, req.body?.api_access_key);
-      res.json({ code: 200, data: { ...accountData(session), accountName: session.name, message: '验证成功' } });
+      res.json({ code: 200, data: { ...accountData(session, allowAccountLxSources), accountName: session.name, message: '验证成功' } });
     } catch (error) {
       next(error);
     }
@@ -184,10 +190,10 @@ export function createLoginRouter({
         name: req.body?.name,
         stateless: req.body?.stateless,
         useLuoxue: req.body?.useLuoxue,
-        lxSource: req.body?.lxSource
-      }, registry, workDir);
+        lxSource: allowAccountLxSources ? req.body?.lxSource : []
+      }, registry, storage);
       onAccountsChanged?.();
-      res.json({ code: 200, data: { ...accountData(result.session), message: '配置已保存' } });
+      res.json({ code: 200, data: { ...accountData(result.session, allowAccountLxSources), message: '配置已保存' } });
     } catch (error) {
       next(error instanceof BadRequestError ? error : new BadRequestError((error as Error).message));
     }
@@ -207,13 +213,13 @@ export function createLoginRouter({
         apiAccessKey = session.apiAccessKey;
       } else {
         platform = normalizeLoginPlatform(req.body?.platform);
-        apiAccessKey = generateAccountAccessKey(registry, workDir);
+        apiAccessKey = generateAccountAccessKey(registry, storage);
       }
 
       const result = await callLoginModule(platformFactory, platform, 'login/qr/key');
       const qr = getQrPayload(platform, result);
       const qrImage = qr.qrImage || (qr.qrText
-        ? await QRCode.toDataURL(qr.qrText, { width: 320, margin: 1, errorCorrectionLevel: 'H' })
+        ? qrCodeDataUrl(qr.qrText)
         : '');
       pendingLogins.set(qr.token, { mode, apiAccessKey, platform, createdAt: Date.now() });
       res.json({
@@ -239,13 +245,13 @@ export function createLoginRouter({
         const cookie = serializeCookie(result.cookie);
         if (!cookie) throw new UpstreamError('登录成功但未获取到有效 cookie');
         const writeResult = mode === 'update'
-          ? updateAccountCookieByAccessKey(apiAccessKey, platform, cookie, registry, workDir)
+          ? updateAccountCookieByAccessKey(apiAccessKey, platform, cookie, registry, storage)
           : createAccountWithCookie(
             apiAccessKey,
             platform,
             cookie,
             registry,
-            workDir,
+            storage,
             await resolveLoggedInAccountName(platform, cookie, platformFactory)
           );
         onAccountsChanged?.();
@@ -254,7 +260,7 @@ export function createLoginRouter({
           data: {
             status: 'success',
             mode,
-            ...accountData(writeResult.session),
+            ...accountData(writeResult.session, allowAccountLxSources),
             accountName: writeResult.session.name,
             message: '登录成功'
           }

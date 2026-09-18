@@ -20,7 +20,7 @@ class QQMusicPlatform extends BasePlatform {
    * 初始化平台
    */
   async doInitialize() {
-    const modulePath = path.join(__dirname, 'module')
+    const modulePath = globalThis.__wowPlatformModules__ ? '' : path.join(__dirname, 'module')
 
     // 异步动态加载模块
     await this.loadModules(modulePath)

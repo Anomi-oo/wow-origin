@@ -3,6 +3,8 @@ node_modules/
 dist/
 coverage/
 *.log
+cloudflare/generated/
+.wrangler/
 
 # 本地运行数据与凭据
 data/

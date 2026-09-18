@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::fs::OpenOptions;
-use std::io::{ErrorKind, Write};
+use std::io::Write;
 use std::path::PathBuf;
 use std::sync::{
     atomic::{AtomicBool, AtomicU64, Ordering},
@@ -33,21 +32,6 @@ struct BackendSnapshot {
 #[derive(Deserialize)]
 struct ReadyPayload {
     port: u16,
-}
-
-#[derive(Deserialize)]
-struct StoredAccount {
-    platform: Option<serde_json::Value>,
-    name: Option<serde_json::Value>,
-    api_access_key: Option<serde_json::Value>,
-}
-
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct DesktopAccountSummary {
-    platform: String,
-    name: String,
-    api_access_key: String,
 }
 
 impl BackendSnapshot {
@@ -90,69 +74,6 @@ fn backend_status(state: State<'_, Arc<BackendState>>) -> BackendSnapshot {
         .lock()
         .expect("backend snapshot lock")
         .clone()
-}
-
-#[tauri::command]
-fn list_accounts<R: Runtime>(app: AppHandle<R>) -> Result<Vec<DesktopAccountSummary>, String> {
-    let file_path = app
-        .path()
-        .app_data_dir()
-        .map_err(|error| error.to_string())?
-        .join("data")
-        .join("accounts.json");
-    let content = match std::fs::read_to_string(file_path) {
-        Ok(content) => content,
-        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(error) => return Err(format!("读取账号列表失败：{error}")),
-    };
-    if content.trim().is_empty() {
-        return Ok(Vec::new());
-    }
-    let accounts: Vec<StoredAccount> =
-        serde_json::from_str(&content).map_err(|error| format!("账号配置格式错误：{error}"))?;
-    let mut key_counts = HashMap::<String, usize>::new();
-    for account in &accounts {
-        let key = account
-            .api_access_key
-            .as_ref()
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or_default()
-            .trim();
-        if !key.is_empty() {
-            *key_counts.entry(key.to_owned()).or_default() += 1;
-        }
-    }
-    Ok(accounts
-        .into_iter()
-        .enumerate()
-        .filter_map(|(index, account)| {
-            let api_access_key = account.api_access_key?.as_str()?.trim().to_owned();
-            if api_access_key.is_empty() || key_counts.get(&api_access_key) != Some(&1) {
-                return None;
-            }
-            let platform_value = account.platform?.as_str()?.trim().to_ascii_lowercase();
-            let platform = match platform_value.as_str() {
-                "qq" | "qqmusic" => "qq".to_owned(),
-                "netease" => "netease".to_owned(),
-                _ => return None,
-            };
-            let name = account
-                .name
-                .and_then(|value| value.as_str().map(ToOwned::to_owned))
-                .unwrap_or_default()
-                .trim()
-                .to_owned();
-            Some(DesktopAccountSummary {
-                name: if name.is_empty() {
-                    format!("{}-{}", platform, index + 1)
-                } else {
-                    name
-                },
-                platform,
-                api_access_key,
-            })
-        })
-        .collect())
 }
 
 fn runtime_script<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
@@ -356,7 +277,6 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
             backend_status,
-            list_accounts,
             restart_backend
         ])
         .setup(move |app| {

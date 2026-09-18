@@ -6,14 +6,12 @@ import { createWowContextResolver } from './adapter';
 import { preloadData } from './onload';
 import { APIError } from './errors';
 import { AccountSessionRegistry, loadAccountSessions } from './accounts';
+import type { AccountStore } from './storage';
 import { createLoginRouter } from './login';
 import { createDashboardRouter } from './dashboard';
 import { createLoginRefreshScheduler } from './loginRefresh';
-import {
-  createLxSourceManager,
-  createLxSourceUpdateScheduler,
-  type LxSourceManager
-} from './lx-resource';
+import { createLxSourceUpdateScheduler } from './lx-resource/scheduler';
+import type { LxSourceLifecycle, LxTrackUrlResolver } from './lx-resource/types';
 
 const Result = require('../core/Result');
 const Logger = require('../core/Logger');
@@ -29,11 +27,19 @@ class MultiPlatformServer {
   private initialized = false;
   private logger: any;
   private accountSessions: AccountSessionRegistry = { sessions: [], byAccessKey: new Map() };
-  private readonly lxSourceManager: LxSourceManager;
+  private readonly lxSourceManager: AppLxSourceManager;
+  private readonly accountStore: AccountStore;
+  private readonly cloudflare: boolean;
+  private readonly serveStatic: boolean;
+  private readonly preload: boolean;
 
-  constructor() {
+  constructor(options: CreateAppOptions = {}) {
     this.logger = new Logger({ component: 'server' });
-    this.lxSourceManager = createLxSourceManager();
+    this.accountStore = options.accountStore ?? loadLocalAccountStore();
+    this.lxSourceManager = options.lxSourceManager ?? loadLocalLxSourceManager();
+    this.cloudflare = options.cloudflare === true;
+    this.serveStatic = options.serveStatic ?? !this.cloudflare;
+    this.preload = options.preload ?? !this.cloudflare;
   }
 
   private shouldExposeOpenApiDocs(): boolean {
@@ -57,7 +63,8 @@ class MultiPlatformServer {
     this.app.lxSourceUpdateScheduler = createLxSourceUpdateScheduler(this.lxSourceManager);
     this.app.loginRefreshScheduler = createLoginRefreshScheduler({
       registry: this.accountSessions,
-      platformFactory
+      platformFactory,
+      accountStore: this.accountStore
     });
     this.logger.compact('info', 'Multi-platform music server initialized', 'debug');
     return this.app;
@@ -87,8 +94,8 @@ class MultiPlatformServer {
 
     this.app!.set('trust proxy', true);
     this.app!.use(cookieParser());
-    this.app!.use(express.static(path.join(__dirname, '..', 'public')));
-    this.accountSessions = loadAccountSessions();
+    if (this.serveStatic) this.app!.use(express.static(path.join(__dirname, '..', 'public')));
+    this.accountSessions = loadAccountSessions(this.accountStore);
     this.reconcileLxSources();
 
     this.app!.use((req: Request, res: Response, next: NextFunction) => {
@@ -116,17 +123,22 @@ class MultiPlatformServer {
       });
     }
 
-    this.app!.use('/app/api', createDashboardRouter());
+    this.app!.use('/app/api', createDashboardRouter({
+      registry: this.accountSessions,
+      cloudflare: this.cloudflare
+    }));
     this.app!.use('/login', createLoginRouter({
       registry: this.accountSessions,
       platformFactory,
+      accountStore: this.accountStore,
+      allowAccountLxSources: !this.cloudflare,
       onAccountsChanged: () => this.reconcileLxSources()
     }));
     this.app!.use(createWowRouter({
       resolveContext: createWowContextResolver(this.accountSessions, this.lxSourceManager),
       onError: (error, request) => this.logger.error('Wow v1 request failed', error, { url: request.url })
     }));
-    await preloadData(platformFactory, this.accountSessions, this.lxSourceManager);
+    if (this.preload) await preloadData(platformFactory, this.accountSessions, this.lxSourceManager);
 
     const resourceRoutes: string[] = platformFactory
       .getAvailableRoutes()
@@ -204,8 +216,30 @@ class MultiPlatformServer {
 }
 
 /** 创建并初始化 Express 应用；监听端口由 server.ts 负责。 */
-export async function createApp(): Promise<Express> {
-  return new MultiPlatformServer().initialize();
+export interface CreateAppOptions {
+  accountStore?: AccountStore;
+  lxSourceManager?: AppLxSourceManager;
+  cloudflare?: boolean;
+  serveStatic?: boolean;
+  preload?: boolean;
+}
+
+export interface AppLxSourceManager extends LxTrackUrlResolver, LxSourceLifecycle {
+  reconcileAccountSources(sourceGroups: readonly (readonly string[])[]): void;
+}
+
+function loadLocalAccountStore(): AccountStore {
+  const localRequire = require;
+  return localRequire('./storage').createLocalAccountStore();
+}
+
+function loadLocalLxSourceManager(): AppLxSourceManager {
+  const localRequire = require;
+  return localRequire('./lx-resource').createLxSourceManager();
+}
+
+export async function createApp(options: CreateAppOptions = {}): Promise<Express> {
+  return new MultiPlatformServer(options).initialize();
 }
 
 export { MultiPlatformServer, platformFactory };

@@ -18,6 +18,11 @@
     "desktop:prepare": "node scripts/prepare-desktop.mjs",
     "desktop:dev": "npm run build && npm run desktop:prepare && tauri dev",
     "desktop:build": "npm run build && npm run desktop:prepare && tauri build",
+    "cloudflare:prepare": "node cloudflare/scripts/prepare.mjs",
+    "cloudflare:typecheck": "npm run cloudflare:prepare && tsc -p cloudflare/tsconfig.json",
+    "cloudflare:dev": "wrangler dev",
+    "cloudflare:deploy": "wrangler deploy",
+    "deploy": "npm run cloudflare:deploy",
     "tauri": "tauri"
   },
   "keywords": [
@@ -46,6 +51,7 @@
     "tough-cookie": "^6.0.0"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260918.1",
     "@tauri-apps/cli": "^2.11.4",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.3",
@@ -55,6 +61,7 @@
     "supertest": "^7.1.4",
     "ts-jest": "^29.1.1",
     "ts-node": "^10.9.2",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "wrangler": "^4.134.0"
   }
 }

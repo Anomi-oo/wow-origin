@@ -1,7 +1,8 @@
 import { Server } from 'http';
 import type { LoginRefreshScheduler } from '../src/loginRefresh';
 import type {
-  LxSourceManager,
+  LxSourceLifecycle,
+  LxTrackUrlResolver,
   LxSourceUpdateScheduler
 } from '../src/lx-resource';
 
@@ -11,7 +12,7 @@ declare global {
       server?: Server;
       platformFactory?: any;
       loginRefreshScheduler?: LoginRefreshScheduler;
-      lxSourceManager?: LxSourceManager;
+      lxSourceManager?: LxSourceLifecycle & LxTrackUrlResolver;
       lxSourceUpdateScheduler?: LxSourceUpdateScheduler;
     }
   }

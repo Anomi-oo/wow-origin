@@ -513,6 +513,15 @@ const PLATFORM_DISPLAY_NAMES = {
   'spotify': 'Spotify Platform'
 }
 
+const PLATFORM_CONFIGS = {
+  netease: require('../platforms/netease/config'),
+  qqmusic: require('../platforms/qqmusic/config')
+}
+const EMPTY_PLATFORM_CONFIG = {
+  getPlatformValidationRules: () => ({}),
+  getRouteCacheConfigs: () => ({})
+}
+
 class PlatformConfig {
   // 配置缓存 - 避免每次请求都require(),提升性能 (O(1)查找)
   static _configCache = new Map()
@@ -523,7 +532,8 @@ class PlatformConfig {
    */
   static _getPlatformConfig(platformName) {
     if (!this._configCache.has(platformName)) {
-      const config = require(`../platforms/${platformName}/config`)
+      const config = PLATFORM_CONFIGS[platformName]
+        || (platformName === 'test' ? require('../platforms/test/config') : EMPTY_PLATFORM_CONFIG)
       this._configCache.set(platformName, config)
     }
     return this._configCache.get(platformName)

@@ -19,8 +19,10 @@ import type {
   UserProfile,
   WowAdapter
 } from 'aduoer-wow-sdk';
-import path from 'path';
 import { type MusicPlatform, notSupported } from '../types';
+
+const defaultPlatformFactory = require('../../platforms/PlatformFactory');
+const { globalCache } = require('../../core/PlatformCache');
 
 export abstract class MusicClientBase implements WowAdapter {
   protected readonly cookie: string;
@@ -38,7 +40,7 @@ export abstract class MusicClientBase implements WowAdapter {
   }
 
   protected get platformFactory(): any {
-    return (globalThis as any).__musicPlatformFactory__ || require(path.resolve(__dirname, '..', '..', 'platforms', 'PlatformFactory'));
+    return (globalThis as any).__musicPlatformFactory__ || defaultPlatformFactory;
   }
 
   private get platformModuleName(): string {
@@ -116,7 +118,6 @@ export abstract class MusicClientBase implements WowAdapter {
   }
 
   protected cachedUntilNextLocalMidnight<T>(route: string, params: Record<string, any>, producer: () => T): T {
-    const { globalCache } = require(path.resolve(__dirname, '..', '..', 'core', 'PlatformCache'));
     const platformName = this.platformModuleName;
     const cached = globalCache.get(platformName, route, params);
     if (cached) {

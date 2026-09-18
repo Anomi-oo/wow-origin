@@ -207,6 +207,16 @@ class BasePlatform {
    * 加载平台API模块（异步批量加载）
    */
   async loadModules(modulePath) {
+    const staticRegistry = globalThis.__wowPlatformModules__
+    const staticModules = staticRegistry && staticRegistry[this.name]
+    if (staticModules) {
+      for (const [route, moduleFunction] of Object.entries(staticModules)) {
+        this.modules.set(route, moduleFunction)
+      }
+      this.logger.compact('module', `Loaded ${this.modules.size} statically bundled modules`, 'debug')
+      return
+    }
+
     const fs = require('fs').promises
     const path = require('path')
 

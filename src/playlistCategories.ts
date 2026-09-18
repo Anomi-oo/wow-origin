@@ -1,4 +1,4 @@
-import path from 'node:path';
+const { getPlaylistCategoryMap } = require('../platforms/qqmusic/config');
 
 export const NETEASE_PLAYLIST_CATEGORY_LABELS = [
   '全部',
@@ -83,8 +83,6 @@ export function getNeteasePlaylistCategoryMap(): Record<string, string> {
 }
 
 export function getQQPlaylistCategoryMap(): Record<string, string> {
-  const configPath = path.resolve(__dirname, '..', 'platforms', 'qqmusic', 'config');
-  const { getPlaylistCategoryMap } = require(configPath);
   const byLabel: Record<string, number> = getPlaylistCategoryMap();
   return Object.fromEntries(
     Object.entries(byLabel).map(([label, key]) => [String(key), label])
@@ -92,8 +90,6 @@ export function getQQPlaylistCategoryMap(): Record<string, string> {
 }
 
 export function getQQPlaylistCategoryEntries(): [string, string][] {
-  const configPath = path.resolve(__dirname, '..', 'platforms', 'qqmusic', 'config');
-  const { getPlaylistCategoryMap } = require(configPath);
   const byLabel: Record<string, number> = getPlaylistCategoryMap();
   return Object.entries(byLabel).map(([label, key]) => [String(key), label]);
 }

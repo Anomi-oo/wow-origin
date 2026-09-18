@@ -4,6 +4,7 @@ const os = require('os')
 const path = require('path')
 const request = require('supertest')
 const { loadAccountSessions } = require('../../../dist/accounts')
+const { createLocalAccountStore } = require('../../../dist/storage')
 const { createLoginRouter } = require('../../../dist/login')
 const { APIError } = require('../../../dist/errors')
 
@@ -18,14 +19,20 @@ function makeWorkDir() {
 
 function createApp(workDir, factory) {
   const app = express()
-  const registry = loadAccountSessions(workDir)
+  const accountStore = createLocalAccountStore(workDir)
+  const registry = loadAccountSessions(accountStore)
   app.use(express.json())
-  app.use('/login', createLoginRouter({ registry, platformFactory: factory, workDir }))
+  app.use('/login', createLoginRouter({ registry, platformFactory: factory, accountStore }))
   app.use((error, _req, res, _next) => {
     const status = error instanceof APIError ? error.status : 500
     res.status(status).json({ code: status, message: error.message, data: null })
   })
-  return { app, registry }
+  return { app, registry, accountStore }
+}
+
+function readAccounts(workDir) {
+  const store = createLocalAccountStore(workDir)
+  try { return store.list() } finally { store.close() }
 }
 
 describe('login router', () => {
@@ -156,7 +163,7 @@ describe('login router', () => {
       .send({ token: 'qr-token' })
       .expect(200)
 
-    const saved = JSON.parse(fs.readFileSync(path.join(workDir, 'data', 'accounts.json'), 'utf8'))
+    const saved = readAccounts(workDir)
     expect(check.body.data).toMatchObject({
       status: 'success',
       mode: 'update',
@@ -221,7 +228,7 @@ describe('login router', () => {
       .send({ token: 'qr-token' })
       .expect(200)
 
-    const saved = JSON.parse(fs.readFileSync(path.join(workDir, 'data', 'accounts.json'), 'utf8'))
+    const saved = readAccounts(workDir)
     expect(saved[0]).toMatchObject({
       platform: 'qq',
       name: 'QQ',
@@ -299,7 +306,7 @@ describe('login router', () => {
       lxSource: ['https://example.com/a.js']
     })
     expect(registry.byAccessKey.get('key-1').cookie).toBe('old_cookie')
-    const saved = JSON.parse(fs.readFileSync(path.join(workDir, 'data', 'accounts.json'), 'utf8'))
+    const saved = readAccounts(workDir)
     expect(saved[0]).toMatchObject({ platform: 'qq', cookie: 'old_cookie', name: '客厅账号' })
   })
 
@@ -360,7 +367,7 @@ describe('login router', () => {
       .send({ token: 'new-qr-token' })
       .expect(200)
 
-    const saved = JSON.parse(fs.readFileSync(path.join(workDir, 'data', 'accounts.json'), 'utf8'))
+    const saved = readAccounts(workDir)
     expect(check.body.data).toMatchObject({
       status: 'success',
       mode: 'create',

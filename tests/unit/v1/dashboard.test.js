@@ -41,7 +41,7 @@ describe('desktop dashboard', () => {
       isLoopback: false
     })
     expect(response.body.data.port).toBe(3000)
-    expect(response.body.data.addresses[0].qrImage).toMatch(/^data:image\/png;base64,/)
+    expect(response.body.data.addresses[0].qrImage).toMatch(/^data:image\/svg\+xml;base64,/)
   })
 
   test('账号二维码包含当前 host、token 和名称', async () => {
@@ -57,7 +57,7 @@ describe('desktop dashboard', () => {
     expect(response.body.data.payload).toBe('type=wow&host=http://192.168.1.8:23231&token=account-key&name=我的 QQ')
     const auth = new URL(response.body.data.addUrl).searchParams.get('auth')
     expect(Buffer.from(auth, 'base64url').toString('utf8')).toBe(response.body.data.payload)
-    expect(response.body.data.qrImage).toMatch(/^data:image\/png;base64,/)
+    expect(response.body.data.qrImage).toMatch(/^data:image\/svg\+xml;base64,/)
   })
 
   test('内嵌 Node 启动器可从含空格的 sidecar 目录加载服务入口', () => {
@@ -107,6 +107,7 @@ describe('desktop dashboard', () => {
     expect(html).toContain('class="account-identity"')
     expect(html).toContain('id="account-origin-qr"')
     expect(html).toContain('id="add-lx-source"')
+    expect(html).toMatch(/id="account-lx-source-settings"[^>]*>[\s\S]*账号洛雪源/)
     expect(html).not.toContain('id="origin-qr"')
     expect(html).not.toContain('id="desktop-account-list"')
     expect(script).toContain("location.pathname === '/login'")
@@ -120,10 +121,10 @@ describe('desktop dashboard', () => {
     expect(script).toContain("history.replaceState({}, '', page === 'login' ? '#login' : '#home')")
     expect(script).not.toMatch(/location\.hash\s*=(?!=)/)
     expect(script).toContain('document.body.dataset.page = page')
-    expect(script).toContain("window.__TAURI__.core.invoke('list_accounts')")
+    expect(script).toContain("accounts = await request('/app/api/accounts')")
     expect(script).toMatch(/async function loadDesktopAccounts\(\) \{\s+if \(!isTauri\(\)\) return;/)
-    expect(tauriSource).toContain('fn list_accounts<R: Runtime>')
-    expect(tauriSource).toContain('.join("accounts.json")')
+    expect(tauriSource).not.toContain('fn list_accounts<R: Runtime>')
+    expect(tauriSource).not.toContain('.join("accounts.json")')
     expect(tauriSource).toContain('.arg("--eval")')
     expect(tauriSource).toContain('include_str!("node-runtime-bootstrap.cjs")')
     expect(tauriSource).not.toContain('.arg(script.to_string_lossy().to_string())')
