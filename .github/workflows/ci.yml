@@ -2,9 +2,17 @@ name: CI and release
 
 on:
   pull_request:
+    paths-ignore:
+      - rewrite/**
+      - tests/unit/rewriteBuild.test.js
+      - .github/workflows/rewrite.yml
   push:
     branches: [main]
     tags: ['v*']
+    paths-ignore:
+      - rewrite/**
+      - tests/unit/rewriteBuild.test.js
+      - .github/workflows/rewrite.yml
 
 permissions:
   contents: write
@@ -122,5 +130,8 @@ jobs:
             gh release create "$GITHUB_REF_NAME" release-assets/* \
               --repo "$GITHUB_REPOSITORY" \
               --title "Wow ${GITHUB_REF_NAME#v}" \
-              --generate-notes
+              --generate-notes || \
+            gh release upload "$GITHUB_REF_NAME" release-assets/* \
+              --repo "$GITHUB_REPOSITORY" \
+              --clobber
           fi

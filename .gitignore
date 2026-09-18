@@ -6,6 +6,8 @@ data/*
 !data/accounts.example.json
 cloudflare/generated/
 .wrangler/
+rewrite/generated/
+rewrite/dist/
 
 # 测试覆盖率报告
 coverage/

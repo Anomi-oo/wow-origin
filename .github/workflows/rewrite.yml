@@ -1,0 +1,88 @@
+name: Rewrite CI and release
+
+on:
+  pull_request:
+    paths:
+      - rewrite/**
+      - platforms/**
+      - core/**
+      - src/**
+      - package.json
+      - package-lock.json
+      - tsconfig.json
+      - tests/unit/rewriteBuild.test.js
+      - .github/workflows/rewrite.yml
+  push:
+    branches: [main]
+    tags: ['v*']
+    paths:
+      - rewrite/**
+      - platforms/**
+      - core/**
+      - src/**
+      - package.json
+      - package-lock.json
+      - tsconfig.json
+      - tests/unit/rewriteBuild.test.js
+      - .github/workflows/rewrite.yml
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing Release tag; leave empty to use the latest Release
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run rewrite:typecheck
+      - run: npm test -- --runInBand tests/unit/rewriteBuild.test.js
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wow-rewrite
+          path: rewrite/dist/*
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload rewrite assets to GitHub Release
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_TAG: ${{ inputs.release_tag }}
+        shell: bash
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            target_tag="$GITHUB_REF_NAME"
+          elif [ -n "$REQUESTED_TAG" ]; then
+            target_tag="$REQUESTED_TAG"
+          else
+            target_tag="$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)"
+          fi
+
+          if gh release view "$target_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$target_tag" rewrite/dist/* \
+              --repo "$GITHUB_REPOSITORY" \
+              --clobber
+          elif [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            gh release create "$target_tag" rewrite/dist/* \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Wow ${target_tag#v}" \
+              --generate-notes || \
+            gh release upload "$target_tag" rewrite/dist/* \
+              --repo "$GITHUB_REPOSITORY" \
+              --clobber
+          else
+            echo "Release $target_tag does not exist" >&2
+            exit 1
+          fi
+
+          echo "Uploaded rewrite assets to Release \`$target_tag\` from \`$GITHUB_SHA\`." >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,12 @@
+#!name=Wow Origin
+#!desc=Aduoer Wow Origin For Serverless
+#!author=Anomi-oo
+#!homepage=https://github.com/Anomi-oo/wow-origin
+
+[Script]
+http-request ^https?:\/\/pinhaoge\.xyz(?::\d+)?(?:\/.*)?$ script-path=https://github.com/Anomi-oo/wow-origin/releases/latest/download/wow-origin.rewrite.js,tag=Wow Origin API,requires-body=true,timeout=60,enable=true
+http-request ^https:\/\/c\.y\.qq\.com\/base\/fcgi-bin\/fcg_check script-path=https://github.com/Anomi-oo/wow-origin/releases/latest/download/wow-origin.rewrite.js,tag=Wow Origin QQ Cookie,requires-body=false,timeout=10,enable=true
+http-request ^https:\/\/music\.163\.com\/weapi\/user\/level script-path=https://github.com/Anomi-oo/wow-origin/releases/latest/download/wow-origin.rewrite.js,tag=Wow Origin 网易云 Cookie,requires-body=true,timeout=10,enable=true
+
+[MITM]
+hostname = pinhaoge.xyz, c.y.qq.com, music.163.com

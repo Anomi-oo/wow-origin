@@ -171,6 +171,69 @@ macOS:   ~/Library/Application Support/com.anomi-oo.woworigin/data
 xattr -d com.apple.quarantine /Applications/Wow.app
 ```
 
+### 4. 请求重写脚本（Quantumult X / Loon，实验性）
+
+请求重写版本不启动 HTTP Backend，也不需要 Node.js、Docker、服务器或 BoxJS。导入配置后，代理工具会拦截 `pinhaoge.xyz` 的 HTTP 与 HTTPS 请求，由同一个 JavaScript 直接响应完整 Wow `/v1/*` SDK 接口。QQ、网易云 Cookie 捕获也包含在这个脚本中。
+
+账号管理页面是一个内联 CSS 与 JavaScript 的独立 HTML 文件，默认直接从 GitHub `main` 分支的 `rewrite/ui/index.html` 获取，再作为 `pinhaoge.xyz` 的响应返回。页面提交到 `main` 后即可更新，无需重新发布 Release；页面暂时不可用不会影响 Wow API。
+
+QuanX snippet 与 Loon plugin 从 GitHub `main` 分支的 Raw 文本地址导入，避免代理工具无法处理 GitHub Release 附件下载重定向。两份配置仍统一从最新 Release 的 `wow-origin.rewrite.js` 加载核心脚本。配置文件不进入构建目录和 Release；Release 只提供核心 JS 与 HTML 快照。
+
+请求重写版本使用独立的 **Rewrite CI and release** 工作流：相关改动合并到 `main` 后会自动构建并覆盖最新 Release；推送 `v*` tag 时会上传到对应 Release；也可以手动运行，选择用于构建的分支（通常是 `main`），并通过 `release_tag` 指定已有 Release，留空则覆盖最新 Release。这个工作流不会构建 Docker 或桌面版，纯 `rewrite/**` 改动也不会触发主 CI。
+
+发布 Release 后可直接导入：
+
+- [一键导入 Quantumult X](https://quantumult.app/x/open-app/add-resource?remote-resource=%7B%22rewrite_remote%22%3A%5B%22https%3A%2F%2Fraw.githubusercontent.com%2FAnomi-oo%2Fwow-origin%2Fmain%2Frewrite%2Fresources%2Fwow-origin.quantumultx.snippet%2C%20tag%3DWow%20Origin%2C%20enabled%3Dtrue%22%5D%7D)
+- [一键导入 Loon](loon://import?plugin=https%3A%2F%2Fraw.githubusercontent.com%2FAnomi-oo%2Fwow-origin%2Fmain%2Frewrite%2Fresources%2Fwow-origin.loon.plugin)
+
+导入后启用 MitM，并安装、信任当前代理工具的 MitM 证书。然后打开：
+
+```text
+https://pinhaoge.xyz/
+http://pinhaoge.xyz/
+```
+
+登录 QQ 音乐或网易云音乐并触发对应请求后，脚本会从请求头捕获 Cookie、保存到当前代理工具的本地存储并发送通知。账号页面会显示最近捕获的平台、时间和完整 Cookie，可复制或直接用于创建、更新账号。
+
+Aduoer 中的源地址固定填写：
+
+```text
+https://pinhaoge.xyz
+http://pinhaoge.xyz
+```
+
+该版本只提供 Wow SDK 接口和最小账号管理能力；不提供洛雪源、扫码登录及 Docker/桌面端的其他完整服务能力。
+
+本地构建：
+
+```bash
+npm ci
+npm run rewrite:build
+```
+
+构建产物位于 `rewrite/dist/`：
+
+```text
+wow-origin.rewrite.js             # QuanX/Loon 共用的核心脚本
+wow-origin.rewrite.html           # 内嵌管理页面的构建快照
+```
+
+Raw 配置源码位于 `rewrite/resources/`，无需参与构建：
+
+```text
+wow-origin.quantumultx.snippet    # Quantumult X 重写资源
+wow-origin.loon.plugin            # Loon 插件
+```
+
+可在构建时覆盖入口域名。HTML 默认读取 GitHub `main` 分支，通常无需单独设置：
+
+```bash
+WOW_REWRITE_ORIGIN="https://pinhaoge.xyz" \
+npm run rewrite:build
+```
+
+如需调试自定义管理页面，可通过 `WOW_REWRITE_UI_URL` 覆盖默认值。GitHub 仓库和 Release 必须公开，QuanX/Loon 才能在没有 GitHub 登录凭据的情况下下载这些资源。
+
 ### 登录账号
 
 服务启动后，在浏览器中打开登录页面：
@@ -316,6 +379,7 @@ wow-origin/
 ├── tests/                  # 单元测试和集成测试
 ├── public/                 # 首页与账号管理页面
 ├── cloudflare/             # Worker、DO SQLite 与 CF 专用静态打包流程
+├── rewrite/                # QuanX/Loon 通用请求重写脚本与打包流程
 ├── src-tauri/              # Tauri 桌面壳、托盘和 sidecar 生命周期
 ├── scripts/                # 桌面运行时准备脚本
 ├── data/

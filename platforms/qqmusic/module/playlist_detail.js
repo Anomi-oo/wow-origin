@@ -18,7 +18,7 @@ module.exports = (query, request) => {
       enc_host_uin: ''
     }
 
-    return response = request('music.srfDissInfo.aiDissInfo', 'uniform_get_Dissinfo', data, {
+    return request('music.srfDissInfo.aiDissInfo', 'uniform_get_Dissinfo', data, {
       uin: query.uin || 0,
       qm_keyst: query.qm_keyst || ''
     }).then(response => {

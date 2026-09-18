@@ -5,6 +5,8 @@ coverage/
 *.log
 cloudflare/generated/
 .wrangler/
+rewrite/generated/
+rewrite/dist/
 
 # 本地运行数据与凭据
 data/

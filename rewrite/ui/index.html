@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wow Origin · Rewrite</title>
+  <style>
+:root { color-scheme:dark; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:#090b10; color:#f5f7fb; }
+* { box-sizing:border-box; }
+body { margin:0; min-width:320px; background:radial-gradient(circle at 80% 0%,#14241f 0,transparent 30rem),#090b10; }
+main { width:min(760px,calc(100% - 32px)); margin:0 auto; padding:54px 0 80px; }
+header { margin-bottom:30px; }
+h1 { margin:6px 0 10px; font-size:clamp(30px,6vw,48px); }
+h2 { margin:0 0 4px; font-size:19px; }
+p { line-height:1.55; color:#a7b0bf; }
+.eyebrow { margin:0; color:#6ee7b7; font-size:12px; font-weight:800; letter-spacing:.16em; }
+.card { margin-top:16px; padding:22px; border:1px solid #293140; border-radius:16px; background:#11151d; box-shadow:0 16px 50px rgba(0,0,0,.22); }
+.title-row,.copy-row { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.muted { margin:3px 0; color:#929cad; }
+.accounts { display:grid; gap:8px; margin-top:16px; }
+.account { display:grid; gap:4px; width:100%; padding:13px; text-align:left; color:#f5f7fb; border:1px solid #293140; border-radius:10px; background:#0d1118; }
+.account:hover { border-color:#34d399; }
+.account span { color:#929cad; font-size:12px; overflow:hidden; text-overflow:ellipsis; }
+form { display:grid; gap:15px; margin-top:18px; }
+label { display:grid; gap:7px; color:#cbd2dd; font-size:13px; font-weight:650; }
+input,select,textarea,button { font:inherit; }
+input,select,textarea,code { width:100%; min-height:43px; padding:10px 12px; color:#f5f7fb; border:1px solid #293140; border-radius:10px; background:#0d1118; outline:none; }
+input:focus,select:focus,textarea:focus { border-color:#34d399; box-shadow:0 0 0 3px rgba(52,211,153,.1); }
+textarea { min-height:118px; resize:vertical; }
+button { padding:10px 15px; border:1px solid transparent; border-radius:10px; cursor:pointer; font-weight:700; }
+button:disabled { opacity:.55; cursor:wait; }
+.primary { color:#062017; background:#6ee7b7; }
+.secondary { color:#e6eaf0; border-color:#364052; background:#171c26; }
+.switch { display:flex; align-items:center; justify-content:space-between; }
+.switch span { display:grid; gap:3px; }
+.switch small { color:#929cad; font-weight:400; }
+.switch input { width:20px; min-height:20px; }
+.copy-row code { display:block; min-width:0; min-height:auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:"SFMono-Regular",Consolas,monospace; font-size:12px; }
+.copy-row button { flex:none; }
+.cookie-meta { display:flex; justify-content:space-between; gap:12px; margin:16px 0 9px; }
+.cookie-value { min-height:72px; overflow-wrap:anywhere; white-space:pre-wrap; }
+#connection label { margin-top:15px; }
+.add-button { display:block; margin-top:18px; padding:12px 15px; border-radius:10px; text-align:center; text-decoration:none; font-weight:750; }
+#message { min-height:1.4em; margin-bottom:0; }
+.success { color:#6ee7b7; }
+.error { color:#fca5a5; }
+.hidden { display:none !important; }
+.mono { font-family:"SFMono-Regular",Consolas,monospace; }
+@media (max-width:560px) { main { padding-top:30px; } .card { padding:17px; } .title-row { align-items:flex-start; } }
+</style>
+</head>
+<body>
+  <main>
+    <header>
+      <p class="eyebrow">SCRIPT REWRITE</p>
+      <h1>Wow Origin 账号</h1>
+      <p>适用于 Quantumult X、Loon 等代理工具的轻量 Wow SDK 兼容服务。这里只管理账号；完整能力请使用 Docker 或桌面版。</p>
+    </header>
+
+    <section class="card">
+      <div class="title-row">
+        <div><h2>最近捕获的 Cookie</h2><p class="muted">来自 QQ 音乐或网易云音乐重写请求。</p></div>
+        <button id="refresh-cookie" class="secondary" type="button">刷新</button>
+      </div>
+      <div id="captured-cookie-empty" class="muted">尚未捕获 Cookie</div>
+      <div id="captured-cookie" class="hidden">
+        <div class="cookie-meta"><strong id="captured-platform"></strong><span id="captured-time" class="muted"></span></div>
+        <div class="copy-row"><code id="captured-value" class="cookie-value"></code><button class="secondary copy" data-target="captured-value" type="button">复制</button></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="title-row">
+        <div><h2>已有账号</h2><p class="muted">账号与捕获的 Cookie 保存在当前代理工具的本地存储中。</p></div>
+        <button id="refresh" class="secondary" type="button">刷新</button>
+      </div>
+      <div id="accounts" class="accounts"></div>
+    </section>
+
+    <section class="card">
+      <div class="title-row">
+        <div><h2 id="form-title">导入账号</h2><p id="form-hint" class="muted">从对应音乐平台网页复制 Cookie。</p></div>
+        <button id="new-account" class="secondary hidden" type="button">添加新账号</button>
+      </div>
+      <form id="account-form">
+        <label><span>平台</span><select id="platform"><option value="qq">QQ 音乐</option><option value="netease">网易云音乐</option></select></label>
+        <label><span>名称</span><input id="name" maxlength="100" placeholder="我的音乐账号"></label>
+        <label><span id="cookie-label">Cookie</span><textarea id="cookie" class="mono" placeholder="粘贴 Cookie；匿名账号可以留空"></textarea></label>
+        <label id="captured-cookie-field" class="switch"><span><strong id="captured-cookie-label">使用最近捕获的 QQ 音乐 Cookie</strong><small>Cookie 输入框为空时，从本地捕获结果读取</small></span><input id="use-captured-cookie" type="checkbox" checked></label>
+        <label id="key-field"><span>api_access_key（可选）</span><input id="key" class="mono" autocomplete="off" placeholder="留空自动生成"></label>
+        <label class="switch"><span><strong>无状态模式</strong><small>用户数据由 Aduoer 客户端维护</small></span><input id="stateless" type="checkbox"></label>
+        <button id="submit" class="primary" type="submit">导入账号</button>
+      </form>
+      <p id="message" role="status"></p>
+    </section>
+
+    <section id="connection" class="card hidden">
+      <h2>Aduoer 配置</h2>
+      <label><span>源地址</span><div class="copy-row"><code id="origin-url"></code><button class="secondary copy" data-target="origin-url" type="button">复制</button></div></label>
+      <label><span>Token</span><div class="copy-row"><code id="origin-token"></code><button class="secondary copy" data-target="origin-token" type="button">复制</button></div></label>
+      <a id="add-to-aduoer" class="primary add-button" href="#">一键添加到 Aduoer</a>
+    </section>
+  </main>
+  <script>
+(() => {
+  const apiBase = '';
+  const $ = (id) => document.getElementById(id);
+  let selectedKey = '';
+
+  async function request(path, options = {}) {
+    const response = await fetch(`${apiBase}${path}`, options);
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload.code !== 200) throw new Error(payload.message || `请求失败 (${response.status})`);
+    return payload.data;
+  }
+
+  function setMessage(text, error = false) {
+    $('message').textContent = text;
+    $('message').className = error ? 'error' : 'success';
+  }
+
+  function sourceUrl() {
+    return `${window.location.origin}${apiBase}`;
+  }
+
+  function base64Url(value) {
+    const bytes = new TextEncoder().encode(value);
+    let binary = '';
+    bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+  }
+
+  function updateAddLink() {
+    if (!selectedKey) return;
+    const payload = `type=wow&host=${sourceUrl()}&token=${selectedKey}&name=${$('name').value.trim()}`;
+    $('add-to-aduoer').href = `aduoer://origin/add?auth=${base64Url(payload)}`;
+  }
+
+  function updatePlatformFields() {
+    const platformName = $('platform').value === 'qq' ? 'QQ 音乐' : '网易云音乐';
+    $('captured-cookie-label').textContent = `使用最近捕获的${platformName} Cookie`;
+  }
+
+  function resetForm() {
+    selectedKey = '';
+    $('account-form').reset();
+    $('platform').disabled = false;
+    updatePlatformFields();
+    $('key-field').classList.remove('hidden');
+    $('new-account').classList.add('hidden');
+    $('form-title').textContent = '导入账号';
+    $('form-hint').textContent = '从对应音乐平台网页复制 Cookie。';
+    $('cookie-label').textContent = 'Cookie';
+    $('cookie').placeholder = '粘贴 Cookie；匿名账号可以留空';
+    $('submit').textContent = '导入账号';
+    $('connection').classList.add('hidden');
+    setMessage('');
+  }
+
+  async function editAccount(apiAccessKey) {
+    try {
+      const account = await request('/login/api/verify-key', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ api_access_key: apiAccessKey })
+      });
+      selectedKey = account.apiAccessKey;
+      $('platform').value = account.platform;
+      $('platform').disabled = true;
+      updatePlatformFields();
+      $('use-captured-cookie').checked = true;
+      $('name').value = account.name || account.accountName || '';
+      $('cookie').value = '';
+      $('stateless').checked = Boolean(account.stateless);
+      $('key-field').classList.add('hidden');
+      $('new-account').classList.remove('hidden');
+      $('form-title').textContent = '编辑账号';
+      $('form-hint').textContent = 'Cookie 留空会保留当前值。';
+      $('cookie-label').textContent = '新 Cookie（可选）';
+      $('cookie').placeholder = '留空保持当前 Cookie 不变';
+      $('submit').textContent = '保存账号';
+      $('origin-url').textContent = sourceUrl();
+      $('origin-token').textContent = account.apiAccessKey;
+      updateAddLink();
+      $('connection').classList.remove('hidden');
+      setMessage('');
+    } catch (error) {
+      setMessage(error.message || String(error), true);
+    }
+  }
+
+  async function loadAccounts() {
+    const list = $('accounts');
+    list.innerHTML = '<p class="muted">正在读取…</p>';
+    try {
+      const accounts = await request('/app/api/accounts');
+      list.replaceChildren();
+      if (!accounts.length) {
+        const empty = document.createElement('p'); empty.className = 'muted'; empty.textContent = '暂无账号'; list.append(empty);
+        return;
+      }
+      accounts.forEach((account) => {
+        const button = document.createElement('button');
+        button.type = 'button'; button.className = 'account';
+        const name = document.createElement('strong'); name.textContent = account.name;
+        const meta = document.createElement('span'); meta.textContent = `${account.platform === 'qq' ? 'QQ 音乐' : '网易云音乐'} · ${account.apiAccessKey}`;
+        button.append(name, meta);
+        button.addEventListener('click', () => editAccount(account.apiAccessKey));
+        list.append(button);
+      });
+    } catch (error) {
+      list.innerHTML = '';
+      setMessage(error.message || String(error), true);
+    }
+  }
+
+  async function loadCapturedCookie() {
+    try {
+      const captured = await request('/login/api/captured-cookie');
+      $('captured-cookie-empty').classList.toggle('hidden', Boolean(captured));
+      $('captured-cookie').classList.toggle('hidden', !captured);
+      if (!captured) return;
+      $('captured-platform').textContent = captured.platform === 'qq' ? 'QQ 音乐' : '网易云音乐';
+      $('captured-value').textContent = captured.cookie;
+      $('captured-time').textContent = captured.capturedAt ? new Date(captured.capturedAt).toLocaleString() : '';
+    } catch (error) {
+      $('captured-cookie-empty').textContent = error.message || String(error);
+      $('captured-cookie-empty').classList.remove('hidden');
+      $('captured-cookie').classList.add('hidden');
+    }
+  }
+
+  async function saveAccount(event) {
+    event.preventDefault();
+    const submit = $('submit'); submit.disabled = true;
+    const wasEditing = Boolean(selectedKey);
+    try {
+      const body = {
+        platform: $('platform').value,
+        name: $('name').value.trim(),
+        cookie: $('cookie').value.trim(),
+        stateless: $('stateless').checked,
+        use_captured_cookie: $('use-captured-cookie').checked
+      };
+      let account;
+      if (selectedKey) {
+        account = await request('/login/api/account/config', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...body, api_access_key: selectedKey })
+        });
+      } else {
+        account = await request('/login/api/account/import', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...body, api_access_key: $('key').value.trim() })
+        });
+      }
+      await loadAccounts();
+      await editAccount(account.apiAccessKey);
+      setMessage(wasEditing ? '账号已保存' : '账号已导入');
+    } catch (error) {
+      setMessage(error.message || String(error), true);
+    } finally {
+      submit.disabled = false;
+    }
+  }
+
+  async function copy(id, button) {
+    const value = $(id).textContent;
+    if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(value);
+    else {
+      const input = document.createElement('textarea'); input.value = value; document.body.append(input); input.select(); document.execCommand('copy'); input.remove();
+    }
+    const label = button.textContent; button.textContent = '已复制'; setTimeout(() => { button.textContent = label; }, 1000);
+  }
+
+  $('account-form').addEventListener('submit', saveAccount);
+  $('platform').addEventListener('change', updatePlatformFields);
+  $('name').addEventListener('input', updateAddLink);
+  $('refresh').addEventListener('click', loadAccounts);
+  $('refresh-cookie').addEventListener('click', loadCapturedCookie);
+  $('new-account').addEventListener('click', resetForm);
+  document.querySelectorAll('.copy').forEach((button) => button.addEventListener('click', () => copy(button.dataset.target, button)));
+  resetForm();
+  loadCapturedCookie();
+  loadAccounts();
+})();
+</script>
+</body>
+</html>

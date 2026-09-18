@@ -1,0 +1,25 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "allowJs": true,
+    "checkJs": false,
+    "declaration": false,
+    "declarationMap": false,
+    "types": ["node"]
+  },
+  "include": [
+    "./**/*.ts",
+    "../src/clients/**/*.ts",
+    "../src/mappers/**/*.ts",
+    "../src/errors.ts",
+    "../src/playlistCategories.ts",
+    "../src/quality.ts",
+    "../src/qr.ts",
+    "../src/types.ts",
+    "../types/**/*.d.ts"
+  ],
+  "exclude": ["../dist", "../tests", "./dist"]
+}
