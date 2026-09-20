@@ -14,6 +14,24 @@ function makeWorkDir() {
 }
 
 describe('SQLite account store', () => {
+  test('账号数据库使用简洁的 data.db 文件名', () => {
+    const workDir = makeWorkDir()
+
+    expect(sqliteAccountsFilePath(workDir)).toBe(path.join(workDir, 'data', 'data.db'))
+  })
+
+  test('自动接管旧版 wow-origin.sqlite 数据库文件', () => {
+    const workDir = makeWorkDir()
+    const legacyPath = path.join(workDir, 'data', 'wow-origin.sqlite')
+    fs.writeFileSync(legacyPath, '')
+
+    const store = createLocalAccountStore(workDir)
+
+    expect(store.location).toBe(path.join(workDir, 'data', 'data.db'))
+    expect(fs.existsSync(store.location)).toBe(true)
+    expect(fs.existsSync(legacyPath)).toBe(false)
+  })
+
   test('首次启动将 accounts.json 迁移到 SQLite，后续以数据库为准', () => {
     const workDir = makeWorkDir()
     const legacyPath = path.join(workDir, 'data', 'accounts.json')

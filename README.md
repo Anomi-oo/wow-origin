@@ -1,121 +1,36 @@
 # Aduoer Wow Origin
 
-本项目基于 [Aduoer-Music/aduoer-wow-template](https://github.com/Aduoer-Music/aduoer-wow-template) 开发。
+面向 [Aduoer](https://github.com/Aduoer-Music) 的 QQ 音乐、网易云音乐统一 Wow v1 音源服务，支持搜索、歌单、榜单、歌曲、歌手、专辑、歌词和播放地址。
 
-Aduoer Wow Origin 是一个基于 Node.js 与 TypeScript 的多平台音乐 API 服务，为 Aduoer 客户端提供统一的 Wow v1 接口，并兼容网易云音乐、QQ 音乐的部分上游接口。
+## 部署
 
-推荐直接部署到 Cloudflare Workers：不需要服务器或 Docker，免费套餐即可开始使用。项目也提供 Docker 和 Windows / Apple Silicon macOS 桌面部署方式。
+| 方式 | 适合场景 | 说明 |
+| --- | --- | --- |
+| Cloudflare Workers | 推荐，大多数用户 | 免费起步，无需服务器、Docker 或外部数据库 |
+| Docker | 有服务器、Nas 用户 | 功能完整 |
+| 桌面版 | 无服务器用户 | 开箱即用，自带运行环境 |
+| QX、Loon 重写 | - | 仅提供基本能力，无落雪源 |
 
-## 功能
+部署成功后，访问 `http://<your-server>:<port>/login` 配置账号
 
-- 通过统一的 `/v1/*` 接口访问 QQ 音乐和网易云音乐
-- 使用 `Authorization` 令牌选择服务端配置的账号，客户端无需传递平台 Cookie
-- 支持搜索、歌单、榜单、歌曲、专辑、歌手、歌词和播放地址等能力
-- 支持多账号配置、扫码登录和 Cookie 刷新
-- 可选接入洛雪自定义源，为 `/v1/track/url` 提供播放地址回退
-- 提供缓存、并发限制、结构化错误和自动化测试
-
-## 部署方式
-
-推荐顺序：Cloudflare Workers → Docker → 桌面版。
-
-### 1. Cloudflare Workers（推荐）
+### Cloudflare Workers（推荐）
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Anomi-oo/wow-origin)
 
-点击按钮并授权 Cloudflare 后即可创建 Worker。该方式使用原生 Workers、静态资源和 SQLite Durable Object，不使用 Cloudflare Containers，也不需要另外购买服务器或数据库。
+点击按钮并授权即可部署。账号保存在 Durable Object SQLite 中，不使用 Cloudflare Containers，也不需要 PostgreSQL。
 
-如需使用洛雪源，在部署页面的 **Build variables and secrets（构建变量）** 中设置：
+如需洛雪源，在部署页面的构建变量中设置：
 
-| 变量 | 必填 | 说明 |
-| --- | --- | --- |
-| `CF_LX_SOURCE_URL` | 否 | 唯一的全局洛雪源 HTTP(S) 地址 |
-
-构建会下载该地址、进行基础校验并自动计算 SHA-256，然后把脚本静态编译进 **Cloudflare 专用 bundle**。用户不需要提供 hash。普通 Node、Docker 和桌面构建不会包含它。
-
-Cloudflare 部署有以下差异：
-
-- 只支持一个全局洛雪源；账号独立 `lxSource` 在界面和服务端都被禁用。
-- 不在请求时下载脚本，也不使用 `eval`；修改源地址或更新源内容后必须重新部署。
-- 账号保存在 Cloudflare 自动创建的 Durable Object SQLite 中，无需 PostgreSQL 或数据库 ID。
-- 免费套餐存在请求数、CPU 时间和存储配额，具体以 Cloudflare 当前套餐为准。
-- 每天 01:00（Asia/Shanghai）通过 Cron Trigger 刷新账号登录态；洛雪源更新则通过重新部署完成。
-
-本地验证或命令行部署：
-
-```bash
-npm ci
-CF_LX_SOURCE_URL="https://example.com/source.js" npm run cloudflare:deploy
+```text
+CF_LX_SOURCE_URL=https://example.com/source.js
 ```
 
-不使用洛雪源时省略 `CF_LX_SOURCE_URL` 即可。
+Cloudflare 版只支持一个全局洛雪源。脚本会在构建时下载并编译进 Worker；更新源后需要重新部署
 
-### 2. Docker 部署
-
-#### 环境要求
-
-- Docker 20.10 或更高版本
-- Docker Compose v2（使用 Compose 部署时）
-
-#### 1. 准备配置
-
-复制环境变量与账号配置示例：
+### Docker
 
 ```bash
-cp .env.example .env
-cp data/accounts.example.json data/accounts.json
-```
-
-为每个账号设置唯一且不可猜测的 `api_access_key`。可以使用以下命令生成：
-
-```bash
-openssl rand -hex 32
-```
-
-`data/accounts.json` 示例：
-
-```json
-[
-  {
-    "platform": "qq",
-    "name": "QQ 音乐",
-    "cookie": "",
-    "api_access_key": "替换为随机生成的访问密钥",
-    "stateless": false,
-    "useLuoxue": true,
-    "lxSource": []
-  },
-  {
-    "platform": "netease",
-    "name": "网易云音乐",
-    "cookie": "",
-    "api_access_key": "替换为另一个随机访问密钥",
-    "stateless": false,
-    "useLuoxue": true,
-    "lxSource": []
-  }
-]
-```
-
-字段说明：
-
-| 字段 | 说明 |
-| --- | --- |
-| `platform` | `qq` 或 `netease` |
-| `name` | 账号显示名称 |
-| `cookie` | 平台 Cookie；可留空后通过扫码登录写入 |
-| `api_access_key` | `/v1/*` 接口的访问令牌，必填且必须唯一 |
-| `stateless` | 是否以无状态方式使用账号 |
-| `useLuoxue` | 是否允许使用洛雪自定义源解析播放地址 |
-| `lxSource` | 当前账号优先使用的洛雪源 URL 数组，最多 10 个；失败后继续尝试全局源 |
-
-缺失、为空或重复的 `api_access_key` 会导致对应账号被忽略。`stateless` 和 `useLuoxue` 必须使用 JSON 布尔值。
-
-#### 2. 使用 Docker 运行
-
-在项目目录执行：
-
-```bash
+mkdir -p data
 docker run -d \
   --name aduoer-wow \
   -p 3000:3000 \
@@ -125,291 +40,117 @@ docker run -d \
   anomioo/wow-origin:latest
 ```
 
-查看运行日志：
+如果不需要环境变量，可去掉 `--env-file .env`。使用 Compose 时可直接下载配置和环境变量模板：
 
 ```bash
-docker logs -f aduoer-wow
-```
-
-#### 使用 Docker Compose
-
-`docker-compose.yml` 同样通过当前目录的 `Dockerfile` 构建，不会拉取远程项目镜像：
-
-```bash
+mkdir wow-origin && cd wow-origin
+wget -O docker-compose.yml https://raw.githubusercontent.com/Anomi-oo/wow-origin/main/docker-compose.yml
+wget -O .env https://raw.githubusercontent.com/Anomi-oo/wow-origin/main/docker.env.example
+mkdir -p data
 docker compose up -d
 ```
 
-常用命令：
+服务地址为 `http://localhost:3000`，账号管理页面为 `http://localhost:3000/login`，数据保存在 `data/`。
 
-```bash
-docker compose logs -f
-docker compose restart
-docker compose down
-```
+### 桌面版
 
-服务默认监听 `http://localhost:3000`，账号数据和洛雪源缓存保存在宿主机的 `data/` 目录中。
+从 [GitHub Releases](https://github.com/Anomi-oo/wow-origin/releases) 下载 Windows x64 安装包或 Apple Silicon macOS DMG。应用默认监听 `23231`，实际地址和 Aduoer 添加二维码会显示在首页。
 
-### 3. 桌面版
-
-从 GitHub Release 下载 Windows x64 的 `.exe` 或 Apple Silicon macOS 的 `.dmg`。桌面版已经内置 Node.js，不需要另外安装 Node 或 Docker。
-
-- 应用默认监听 `23231`；端口被占用时会自动选择空闲端口，实际地址以首页显示为准。
-- 关闭窗口后代理继续在系统托盘运行；通过托盘中的“退出”才会停止代理。
-- 首页可以选择电脑的局域网 IPv4 地址，并生成 Aduoer 快捷添加源二维码。
-- 点击左侧的“Login”即可登录或管理账号；也可以在浏览器打开首页显示地址后的 `/login`。
-
-桌面版数据保存在系统应用数据目录的 `data/` 子目录中：
-
-```text
-Windows: %APPDATA%\com.anomi-oo.woworigin\data
-macOS:   ~/Library/Application Support/com.anomi-oo.woworigin/data
-```
-
-首版安装包未签名。Windows 可能显示 SmartScreen 提示。macOS 若提示应用已损坏，请将 `Wow.app` 拖入“应用程序”后执行：
+关闭窗口后服务仍在托盘运行。macOS 若提示应用已损坏，将应用移入“应用程序”后执行：
 
 ```bash
 xattr -d com.apple.quarantine /Applications/Wow.app
 ```
 
-### 4. 请求重写脚本（Quantumult X / Loon，实验性）
+### Quantumult X / Loon 等重写方案
 
-请求重写版本不启动 HTTP Backend，也不需要 Node.js、Docker、服务器或 BoxJS。导入配置后，代理工具会拦截 `pinhaoge.xyz` 的 HTTP 与 HTTPS 请求，由同一个 JavaScript 直接响应完整 Wow `/v1/*` SDK 接口。QQ、网易云 Cookie 捕获也包含在这个脚本中。
-
-账号管理页面是一个内联 CSS 与 JavaScript 的独立 HTML 文件，默认直接从 GitHub `main` 分支的 `rewrite/ui/index.html` 获取，再作为 `pinhaoge.xyz` 的响应返回。页面提交到 `main` 后即可更新，无需重新发布 Release；页面暂时不可用不会影响 Wow API。
-
-QuanX snippet 与 Loon plugin 从 GitHub `main` 分支的 Raw 文本地址导入，避免代理工具无法处理 GitHub Release 附件下载重定向。两份配置仍统一从最新 Release 的 `wow-origin.rewrite.js` 加载核心脚本。配置文件不进入构建目录和 Release；Release 只提供核心 JS 与 HTML 快照。
-
-请求重写版本使用独立的 **Rewrite CI and release** 工作流：相关改动合并到 `main` 后会自动构建并覆盖最新 Release；推送 `v*` tag 时会上传到对应 Release；也可以手动运行，选择用于构建的分支（通常是 `main`），并通过 `release_tag` 指定已有 Release，留空则覆盖最新 Release。这个工作流不会构建 Docker 或桌面版，纯 `rewrite/**` 改动也不会触发主 CI。
-
-发布 Release 后可直接导入：
+该版本通过请求重写直接提供 Wow SDK 和账号接口，不需要 HTTP Backend、BoxJS、Node.js 或服务器；不包含洛雪源、扫码登录及完整服务端能力。
 
 - [一键导入 Quantumult X](https://quantumult.app/x/open-app/add-resource?remote-resource=%7B%22rewrite_remote%22%3A%5B%22https%3A%2F%2Fraw.githubusercontent.com%2FAnomi-oo%2Fwow-origin%2Fmain%2Frewrite%2Fresources%2Fwow-origin.quantumultx.snippet%2C%20tag%3DWow%20Origin%2C%20enabled%3Dtrue%22%5D%7D)
 - [一键导入 Loon](loon://import?plugin=https%3A%2F%2Fraw.githubusercontent.com%2FAnomi-oo%2Fwow-origin%2Fmain%2Frewrite%2Fresources%2Fwow-origin.loon.plugin)
 
-导入后启用 MitM，并安装、信任当前代理工具的 MitM 证书。然后打开：
-
-```text
-https://pinhaoge.xyz/
-http://pinhaoge.xyz/
-```
-
-登录 QQ 音乐或网易云音乐并触发对应请求后，脚本会从请求头捕获 Cookie、保存到当前代理工具的本地存储并发送通知。账号页面会显示最近捕获的平台、时间和完整 Cookie，可复制或直接用于创建、更新账号。
-
-Aduoer 中的源地址固定填写：
+导入后启用 MitM，并安装、信任代理工具的证书。访问 QQ 音乐或网易云音乐触发 Cookie 捕获后，打开以下任一地址管理账号：
 
 ```text
 https://pinhaoge.xyz
 http://pinhaoge.xyz
 ```
 
-该版本只提供 Wow SDK 接口和最小账号管理能力；不提供洛雪源、扫码登录及 Docker/桌面端的其他完整服务能力。
+Aduoer 中填写同一地址，并使用页面生成的 Token
 
-本地构建：
+## API
 
-```bash
-npm ci
-npm run rewrite:build
-```
-
-构建产物位于 `rewrite/dist/`：
-
-```text
-wow-origin.rewrite.js             # QuanX/Loon 共用的核心脚本
-wow-origin.rewrite.html           # 内嵌管理页面的构建快照
-```
-
-Raw 配置源码位于 `rewrite/resources/`，无需参与构建：
-
-```text
-wow-origin.quantumultx.snippet    # Quantumult X 重写资源
-wow-origin.loon.plugin            # Loon 插件
-```
-
-可在构建时覆盖入口域名。HTML 默认读取 GitHub `main` 分支，通常无需单独设置：
+所有 Wow 接口位于 `/v1/*`。例如：
 
 ```bash
-WOW_REWRITE_ORIGIN="https://pinhaoge.xyz" \
-npm run rewrite:build
+curl -H "Authorization: Bearer your_api_access_key" \
+  "http://localhost:3000/v1/search/tracks?keywords=周杰伦&limit=20"
 ```
 
-如需调试自定义管理页面，可通过 `WOW_REWRITE_UI_URL` 覆盖默认值。GitHub 仓库和 Release 必须公开，QuanX/Loon 才能在没有 GitHub 登录凭据的情况下下载这些资源。
-
-### 登录账号
-
-服务启动后，在浏览器中打开登录页面：
+常用接口：
 
 ```text
-本机 Docker 或 Node.js：http://localhost:3000/login
-远程服务器：http://服务器 IP 或域名:端口/login
-桌面版：http://首页显示的 IP:实际端口/login
+GET /v1/status
+GET /v1/search/tracks
+GET /v1/playlist/detail
+GET /v1/track
+GET /v1/track/url
+GET /v1/track/lyrics
 ```
 
-例如服务器地址为 `192.168.1.8`、端口为 `3000`，登录地址就是：
+播放音质支持 `max`、`min`、`standard`、`higher`、`exhigh` 和 `lossless`。开发环境可通过 `/openapi.json` 查看完整契约。
 
-```text
-http://192.168.1.8:3000/login
-```
-
-首次添加账号时选择平台并扫码；扫码成功后会创建账号、显示生成的 `api_access_key`，并进入账号配置页面。更新已有账号时输入 `api_access_key` 即可直接修改名称、无状态模式和洛雪源配置，不需要重新扫码；只有刷新 Cookie 时才需要再次扫码。
-
-登录成功后，服务会更新内存中的账号会话，并把 Cookie 写入账号数据库。Docker、Node 和桌面版使用 `data/wow-origin.sqlite`；Cloudflare 使用 Durable Object SQLite。数据库包含登录凭据，不应提交到 Git、发送给他人或放入公开镜像。
-
-为了兼容旧版本，本地启动时若 SQLite 账号表为空且存在 `data/accounts.json`，会自动导入一次。导入后 SQLite 是唯一数据源，继续修改 JSON 不会生效。备份本地部署时请备份 `data/wow-origin.sqlite`（并同时保留其 `-wal`、`-shm` 文件，或先停止服务再复制数据库）。
-
-### API 使用
-
-#### Wow v1 API
-
-`/v1/*` 使用 `Authorization` 请求头认证。令牌对应账号数据库中的 `api_access_key`，并由服务端决定使用哪个平台账号。
-
-```bash
-# 服务状态和能力
-curl -H "Authorization: Bearer your_api_access_key" \
-  "http://localhost:3000/v1/status"
-
-# 搜索歌曲
-curl -H "Authorization: Bearer your_api_access_key" \
-  "http://localhost:3000/v1/search/tracks?keywords=周杰伦&offset=0&limit=20"
-
-# 获取歌单
-curl -H "Authorization: Bearer your_api_access_key" \
-  "http://localhost:3000/v1/playlist/detail?id=123456789"
-
-# 获取歌曲详情
-curl -H "Authorization: Bearer your_api_access_key" \
-  "http://localhost:3000/v1/track?id=0039MnYb0qxYhV"
-
-# 获取播放地址，quality 默认为 max
-curl -H "Authorization: Bearer your_api_access_key" \
-  "http://localhost:3000/v1/track/url?id=0039MnYb0qxYhV&quality=max"
-
-# 获取歌词
-curl -H "Authorization: Bearer your_api_access_key" \
-  "http://localhost:3000/v1/track/lyrics?id=0039MnYb0qxYhV"
-```
-
-成功响应格式为 `{ "code": 200, "data": ... }`；错误响应格式为 `{ "code": <HTTP 状态码>, "message": "...", "data": null }`。认证失败返回 `401`。
-
-播放地址接口支持自动策略 `max`、`min`，以及 `standard`、`higher`、`exhigh`、`lossless`。自动策略会根据平台能力进行降级或升级，指定具体音质时不会自动切换。
-
-#### 平台兼容接口
-
-项目还保留部分平台原始接口，通过 `platform=netease` 或 `platform=qqmusic` 选择平台：
-
-```bash
-curl "http://localhost:3000/search?keywords=周杰伦&platform=netease"
-curl "http://localhost:3000/song/detail?ids=347230&platform=netease"
-curl "http://localhost:3000/toplist?platform=qqmusic"
-```
-
-此类接口可直接通过 Cookie 或查询参数传递登录信息。新接入建议优先使用 `/v1/*`，避免客户端持有平台 Cookie。
-
-### 环境变量
+## 配置
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
 | `PORT` | `3000` | 服务端口 |
 | `HOST` | `0.0.0.0` | 监听地址 |
-| `NODE_ENV` | `production` | 运行环境 |
-| `LOG_LEVEL` | `info` | `debug`、`info`、`warn` 或 `error` |
-| `CORS_ALLOW_ORIGIN` | `*` | 允许访问的来源，生产环境建议填写具体域名 |
-| `LX_SOURCE_URL` | 空 | 主洛雪自定义源 URL |
-| `LX_SOURCE_URL0` 至 `LX_SOURCE_URL9` | 空 | 按编号依次尝试的备用源 URL |
+| `LOG_LEVEL` | `info` | 日志级别 |
+| `CORS_ALLOW_ORIGIN` | `*` | 允许访问的来源 |
+| `LX_SOURCE_URL` | 空 | Node、Docker、桌面版的主洛雪源 |
+| `LX_SOURCE_URL0`…`LX_SOURCE_URL9` | 空 | 备用洛雪源，按编号尝试 |
+| `CF_LX_SOURCE_URL` | 空 | Cloudflare 构建时使用的全局洛雪源 |
 
-以上洛雪变量只用于 Node、Docker 和桌面版。Cloudflare 只读取构建阶段的 `CF_LX_SOURCE_URL`。
+洛雪源仅用于 `/v1/track/url`。自定义源会作为受信任代码运行，请勿配置未经审核的脚本。
 
-洛雪源仅接管 `/v1/track/url` 的播放地址解析。自定义源 JavaScript 会作为运维可信代码在独立 Worker 中运行，但 Worker 不是安全沙箱，请勿配置未经审核或由用户提交的源地址。
+## 开发
 
-账号配置了 `lxSource` 时，解析顺序为账号源、全局环境变量源；账号源失败后仍会尝试全局源。`useLuoxue` 为 `false` 时不会调用任何洛雪源。
-
-源文件缓存在 `data/lx-sources/`。服务启动时会异步加载，并按进程本地时区每天凌晨 1 点检查更新。
-
-### 安全说明
-
-- `.env`、本地账号数据库、旧 `data/accounts.json`、`data/lx-sources/` 和 `cloudflare/generated/` 已加入 `.gitignore`。
-- 桌面安装包不会内置本机账号数据；账号 Cookie 只写入系统应用数据目录。
-- Docker 构建上下文会排除 `.env` 和整个 `data/` 目录，账号 Cookie 不会被写入镜像。
-- 不要在源码、Issue、日志或截图中公开 Cookie、`api_access_key`、访问令牌和自定义源私有地址。
-- 如果凭据曾进入 Git 历史或公开仓库，仅删除当前文件并不足够；应立即在对应平台撤销或刷新凭据，并清理 Git 历史。
-
-## 开发文档
-
-### 本地开发
-
-环境要求：Node.js 22 或更高版本。
+需要 Node.js 22 或更高版本。
 
 ```bash
 npm ci
 npm run dev
-```
-
-其他命令：
-
-```bash
-npm run build
 npm run typecheck
 npm test
-npm run test:unit
-npm run test:integration
-npm run test:coverage
+```
+
+其他构建命令：
+
+```bash
+npm run cloudflare:typecheck
+npm run cloudflare:deploy
 npm run desktop:build
+npm run rewrite:typecheck
 ```
 
-集成测试会访问真实的上游音乐服务，需要可用网络。
+Rewrite 的单文件页面位于 `rewrite/ui/index.html`，QuanX 和 Loon 配置位于 `rewrite/resources/`。
 
-### OpenAPI 文档
+## 安全说明
 
-开发环境会提供：
-
-```text
-http://localhost:3000/openapi.json
-```
-
-当 `NODE_ENV=production` 时，该端点不会公开。
-
-### 项目结构
-
-```text
-wow-origin/
-├── src/                    # TypeScript 服务、v1 适配器和登录逻辑
-├── core/                   # 缓存、日志、并发限制和响应封装
-├── platforms/              # QQ 音乐与网易云音乐平台模块
-├── types/                  # TypeScript 类型扩展
-├── util/                   # 通用工具
-├── tests/                  # 单元测试和集成测试
-├── public/                 # 首页与账号管理页面
-├── cloudflare/             # Worker、DO SQLite 与 CF 专用静态打包流程
-├── rewrite/                # QuanX/Loon 通用请求重写脚本与打包流程
-├── src-tauri/              # Tauri 桌面壳、托盘和 sidecar 生命周期
-├── scripts/                # 桌面运行时准备脚本
-├── data/
-│   └── accounts.example.json
-├── wrangler.jsonc
-├── Dockerfile
-├── docker-compose.yml
-└── package.json
-```
+- 不要公开 Cookie、数据库、`.env`、`api_access_key` 或私有洛雪源地址。
+- Docker 构建不会包含本地 `data/` 和 `.env`。
+- 若凭据曾进入公开仓库或日志，请立即刷新凭据并清理 Git 历史。
 
 ## 致谢
 
-感谢以下项目提供的模板、接口实现、协议研究与设计参考：
+本项目基于 [Aduoer-Music/aduoer-wow-template](https://github.com/Aduoer-Music/aduoer-wow-template)，并参考了以下项目：
 
-- [Aduoer-Music/aduoer-wow-template](https://github.com/Aduoer-Music/aduoer-wow-template)
 - [tlyanyu/multiPlatformMusicApi](https://github.com/tlyanyu/multiPlatformMusicApi)
 - [neteasecloudmusicapienhanced/api-enhanced](https://github.com/neteasecloudmusicapienhanced/api-enhanced)
 - [jsososo/QQMusicApi](https://github.com/jsososo/QQMusicApi)
 - [lyswhut/lx-music-desktop](https://github.com/lyswhut/lx-music-desktop)
 
-第三方项目及其代码仍受各自许可证与版权声明约束。
+## 许可与免责声明
 
-## 开源协议
-
-本项目使用 [MIT License](LICENSE)。
-
-## 免责声明
-
-- 本项目仅供学习参考使用，请勿用于违法、盗版等用途。
-- 本项目仅供学习交流使用，请勿用于商业用途。
-- 所有音乐、图片、歌词及其他内容的版权归原作者和原平台所有。
-- 使用者应遵守所在地法律法规及相关平台服务条款。
-- 使用本项目所造成的一切后果由使用者自行承担。
+项目采用 [MIT License](LICENSE)，仅供学习与交流。使用者应遵守所在地法律、平台服务条款及内容版权要求，并自行承担使用后果。

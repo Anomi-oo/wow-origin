@@ -16,7 +16,7 @@ npm run test:coverage     # 覆盖率报告
 
 ### 环境配置
 
-复制 `.env.example` 为 `.env`，关键变量：
+复制 `docker.env.example` 为 `.env`，关键变量：
 - `PORT` — 服务端口（默认 3000）
 - `CORS_ALLOW_ORIGIN` — CORS 源（开发用 `*`，生产指定域名）
 

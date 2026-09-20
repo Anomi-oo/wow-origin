@@ -80,7 +80,19 @@ function rowToAccount(row: StoredAccountRow): RawMusicAccount {
 }
 
 export function sqliteAccountsFilePath(workDir: string = process.cwd()): string {
-  return path.join(workDir, 'data', 'wow-origin.sqlite');
+  return path.join(workDir, 'data', 'data.db');
+}
+
+function migrateLegacySqliteFile(workDir: string, destination: string): void {
+  if (fs.existsSync(destination)) return;
+  const legacy = path.join(workDir, 'data', 'wow-origin.sqlite');
+  if (!fs.existsSync(legacy)) return;
+
+  for (const suffix of ['-wal', '-shm']) {
+    const source = `${legacy}${suffix}`;
+    if (fs.existsSync(source)) fs.renameSync(source, `${destination}${suffix}`);
+  }
+  fs.renameSync(legacy, destination);
 }
 
 export class SqliteAccountStore implements AccountStore {
@@ -91,6 +103,7 @@ export class SqliteAccountStore implements AccountStore {
   constructor(workDir: string = process.cwd()) {
     this.location = sqliteAccountsFilePath(workDir);
     fs.mkdirSync(path.dirname(this.location), { recursive: true });
+    migrateLegacySqliteFile(workDir, this.location);
     this.database = new DatabaseSync(this.location);
     this.database.exec('PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;');
     this.database.exec(SCHEMA);
