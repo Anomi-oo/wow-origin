@@ -72,4 +72,12 @@ describe('Cloudflare-only build pipeline', () => {
     expect(dockerEnv).toContain('PORT=3000')
     expect(dockerEnv).not.toContain('CF_LX_SOURCE_URL')
   })
+
+  test('每个 Durable Object 使用独立的空闲内部端口', () => {
+    const worker = fs.readFileSync(path.join(process.cwd(), 'cloudflare', 'worker.ts'), 'utf8')
+
+    expect(worker).not.toContain('NODE_SERVER_PORT')
+    expect(worker).toContain("server.listen(0, '127.0.0.1'")
+    expect(worker).toContain('handleAsNodeRequest(port, request, this.env)')
+  })
 })

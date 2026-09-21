@@ -7,7 +7,6 @@ import { CloudflareLxSourceManager } from './lx-manager';
 
 (globalThis as any).__wowPlatformModules__ = platformModules;
 
-const NODE_SERVER_PORT = 8788;
 const ASSET_PATHS = new Set(['/', '/login', '/app.js', '/styles.css']);
 
 export interface Env {
@@ -16,7 +15,7 @@ export interface Env {
 }
 
 export class OriginDurableObject extends DurableObject<Env> {
-  private readonly ready: Promise<void>;
+  private readonly ready: Promise<number>;
   private app: any;
 
   constructor(ctx: DurableObjectState, env: Env) {
@@ -32,20 +31,25 @@ export class OriginDurableObject extends DurableObject<Env> {
         serveStatic: false,
         preload: false
       });
-      await new Promise<void>((resolve, reject) => {
+      return await new Promise<number>((resolve, reject) => {
         const server = http.createServer(this.app);
         server.once('error', reject);
-        server.listen(NODE_SERVER_PORT, () => {
+        server.listen(0, '127.0.0.1', () => {
           server.off('error', reject);
-          resolve();
+          const address = server.address();
+          if (!address || typeof address === 'string') {
+            reject(new Error('Cloudflare internal HTTP server did not expose a port'));
+            return;
+          }
+          resolve(address.port);
         });
       });
     });
   }
 
   async fetch(request: Request): Promise<Response> {
-    await this.ready;
-    return handleAsNodeRequest(NODE_SERVER_PORT, request, this.env);
+    const port = await this.ready;
+    return handleAsNodeRequest(port, request, this.env);
   }
 
   async refreshLogins(): Promise<void> {

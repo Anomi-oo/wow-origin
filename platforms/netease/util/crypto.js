@@ -60,7 +60,7 @@ const aesDecrypt = (ciphertext, key, iv, format = 'base64') => {
   const input = format === 'base64' ? Buffer.from(ciphertext, 'base64') : Buffer.from(ciphertext, 'hex')
   const algo = 'aes-128-ecb'
   const keyBuf = Buffer.from(key, 'utf8')
-  const decipher = crypto.createDecipheriv(algo, keyBuf, null)
+  const decipher = crypto.createDecipheriv(algo, keyBuf, Buffer.alloc(0))
   const out = Buffer.concat([decipher.update(input), decipher.final()])
   return out.toString('utf8')
 }
@@ -132,7 +132,7 @@ const eapi = (url, object) => {
  */
 const eapiResDecrypt = (encryptedParams) => {
   const hex = typeof encryptedParams === 'string' ? encryptedParams : String(encryptedParams)
-  const decipher = crypto.createDecipheriv('aes-128-ecb', Buffer.from(eapiKey, 'utf8'), null)
+  const decipher = crypto.createDecipheriv('aes-128-ecb', Buffer.from(eapiKey, 'utf8'), Buffer.alloc(0))
   const out = Buffer.concat([decipher.update(Buffer.from(hex, 'hex')), decipher.final()])
   return JSON.parse(out.toString('utf8'))
 }
@@ -144,7 +144,7 @@ const eapiResDecrypt = (encryptedParams) => {
  */
 const eapiResDecryptBuffer = (buf) => {
   const input = Buffer.isBuffer(buf) ? buf : Buffer.from(buf)
-  const decipher = crypto.createDecipheriv('aes-128-ecb', Buffer.from(eapiKey, 'utf8'), null)
+  const decipher = crypto.createDecipheriv('aes-128-ecb', Buffer.from(eapiKey, 'utf8'), Buffer.alloc(0))
   const out = Buffer.concat([decipher.update(input), decipher.final()])
   return JSON.parse(out.toString('utf8'))
 }
@@ -156,7 +156,7 @@ const eapiResDecryptBuffer = (buf) => {
  * @returns {{url:string, data:any}|null} 成功返回 url 与数据对象，失败返回 null
  */
 const eapiReqDecrypt = (encryptedParams) => {
-  const decipher = crypto.createDecipheriv('aes-128-ecb', Buffer.from(eapiKey, 'utf8'), null)
+  const decipher = crypto.createDecipheriv('aes-128-ecb', Buffer.from(eapiKey, 'utf8'), Buffer.alloc(0))
   const out = Buffer.concat([decipher.update(Buffer.from(encryptedParams, 'hex')), decipher.final()])
   const decryptedData = out.toString('utf8')
   const match = decryptedData.match(/(.*?)-36cd479b6b5-(.*?)-36cd479b6b5-(.*)/)

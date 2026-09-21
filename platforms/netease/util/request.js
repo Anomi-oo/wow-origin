@@ -11,6 +11,19 @@ const logger = new Logger({ component: 'netease-request' })
 
 const APP_CONF = getAppConf()
 
+const toResponseBuffer = (value) => {
+  if (Buffer.isBuffer(value)) return value
+  if (value instanceof ArrayBuffer) return Buffer.from(value)
+  const valueType = Object.prototype.toString.call(value)
+  if (valueType === '[object ArrayBuffer]' || valueType === '[object SharedArrayBuffer]') {
+    return Buffer.from(new Uint8Array(value))
+  }
+  if (ArrayBuffer.isView(value)) {
+    return Buffer.from(value.buffer, value.byteOffset, value.byteLength)
+  }
+  return null
+}
+
 const DEFAULT_HEADER = {
   "os": "pc",
   "appver": "3.1.19.204510",
@@ -128,8 +141,9 @@ const createRequest = (uri, data, options) => {
         try {
           if (dataReq.e_r) {
             // eapi接口返回值被加密，需要解密
-            if (Buffer.isBuffer(body) && typeof encrypt.eapiResDecryptBuffer === 'function') {
-              answer.body = encrypt.eapiResDecryptBuffer(body)
+            const responseBuffer = toResponseBuffer(body)
+            if (responseBuffer && typeof encrypt.eapiResDecryptBuffer === 'function') {
+              answer.body = encrypt.eapiResDecryptBuffer(responseBuffer)
             } else {
               answer.body = encrypt.eapiResDecrypt(
                 body.toString('hex').toUpperCase(),

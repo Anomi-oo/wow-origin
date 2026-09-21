@@ -15,9 +15,11 @@
 
 ### Cloudflare Workers（推荐）
 
+推荐先 [Fork 仓库](https://github.com/Anomi-oo/wow-origin/fork)，再到 Cloudflare 连接 Git 仓库并选择自己的 fork。后续可直接使用 GitHub 的 **Sync fork** 同步更新。
+
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Anomi-oo/wow-origin)
 
-点击按钮并授权即可部署。账号保存在 Durable Object SQLite 中，不使用 Cloudflare Containers，也不需要 PostgreSQL。
+上面的按钮适合快速部署，但会创建独立仓库，不支持 **Sync fork**。
 
 如需洛雪源，在部署页面的构建变量中设置：
 
