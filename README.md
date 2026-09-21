@@ -15,11 +15,9 @@
 
 ### Cloudflare Workers（推荐）
 
-推荐先 [Fork 仓库](https://github.com/Anomi-oo/wow-origin/fork)，再到 Cloudflare 连接 Git 仓库并选择自己的 fork。后续可直接使用 GitHub 的 **Sync fork** 同步更新。
-
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Anomi-oo/wow-origin)
 
-上面的按钮适合快速部署，但会创建独立仓库，不支持 **Sync fork**。
+点击按钮并授权即可部署。后续可在生成仓库的 **Actions → Sync upstream → Run workflow** 中手动同步上游，Cloudflare 会自动重新部署；同步不会修改 Cloudflare 环境变量和账号数据。
 
 如需洛雪源，在部署页面的构建变量中设置：
 

@@ -37,6 +37,7 @@ permissions:
 
 jobs:
   build:
+    if: github.repository == 'Anomi-oo/wow-origin'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

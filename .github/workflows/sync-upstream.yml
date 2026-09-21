@@ -1,0 +1,41 @@
+name: Sync upstream
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.repository != 'Anomi-oo/wow-origin'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+      - name: Replace repository files with the latest upstream version
+        env:
+          DESTINATION_BRANCH: ${{ github.event.repository.default_branch }}
+          UPSTREAM_URL: https://github.com/Anomi-oo/wow-origin.git
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 "$UPSTREAM_URL" main
+          git read-tree --reset -u FETCH_HEAD
+
+          if git diff --cached --quiet; then
+            echo "Already up to date." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore: sync upstream"
+          git push origin "HEAD:$DESTINATION_BRANCH"
+          echo "Synced with Anomi-oo/wow-origin main." >> "$GITHUB_STEP_SUMMARY"
