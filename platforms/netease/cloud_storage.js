@@ -2,6 +2,7 @@ const userCloud = require('./module/user_cloud')
 
 const CLOUD_PLAYLIST_ID = 'cloud-storage'
 const CLOUD_PLAYLIST_NAME = '云盘音乐'
+const CLOUD_PLAYLIST_COVER_URL = 'https://ts4.tc.mm.bing.net/th/id/OIP-C.lHkJwZb2BkwjPGWKWbxCCQHaHa?r=0&rs=1&pid=ImgDetMain&o=7&rm=3'
 
 class CloudStorage {
   isCloudPlaylist(playlistId) {
@@ -13,7 +14,7 @@ class CloudStorage {
       id: CLOUD_PLAYLIST_ID,
       name: CLOUD_PLAYLIST_NAME,
       description: '',
-      coverImgUrl: '',
+      coverImgUrl: CLOUD_PLAYLIST_COVER_URL,
       trackCount: this.normalizeTrackCount(trackCount),
       playCount: 0,
       subCount: 0,
@@ -70,5 +71,6 @@ class CloudStorage {
 
 CloudStorage.PLAYLIST_ID = CLOUD_PLAYLIST_ID
 CloudStorage.PLAYLIST_NAME = CLOUD_PLAYLIST_NAME
+CloudStorage.PLAYLIST_COVER_URL = CLOUD_PLAYLIST_COVER_URL
 
 module.exports = CloudStorage

@@ -10,7 +10,7 @@ describe('NetEase cloud storage playlist', () => {
       id: 'cloud-storage',
       name: '云盘音乐',
       description: '',
-      coverImgUrl: '',
+      coverImgUrl: 'https://ts4.tc.mm.bing.net/th/id/OIP-C.lHkJwZb2BkwjPGWKWbxCCQHaHa?r=0&rs=1&pid=ImgDetMain&o=7&rm=3',
       trackCount: 0,
       creator: { userId: '', nickname: '', avatarUrl: '' },
       subscribed: true
