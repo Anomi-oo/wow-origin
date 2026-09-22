@@ -1,4 +1,4 @@
-const { pollLogin } = require('../util/qq_qr_login_2step')
+const { pollLogin } = require('../util/qq-login')
 
 module.exports = async (query, request) => {
   const result = await pollLogin(query.key)
@@ -21,44 +21,12 @@ module.exports = async (query, request) => {
         }
       }
     case 'done':
-      // 登录完成,返回合并后的 cookies
-      const allCookies = {
-        ...result.musicData,
-        ...result.graphCookies,
-        ...result.qqComCookies,
-        ...result.yqqCookies
-      }
-
-      //console.log("allCookies", JSON.stringify(result, null, 2))
-
-      // 筛选核心字段
-      const coreFields = [
-        'openid',
-        'unionid',
-        'uin',
-        'qm_keyst',
-        'musicid',
-        'access_token',
-        'refresh_token',
-        'musickey',
-        'refresh_key',
-        'expired_at'
-      ]
-
-      const filteredCookie = {}
-      coreFields.forEach(field => {
-        if (allCookies[field] !== undefined) {
-          filteredCookie[field] = allCookies[field]
-        }
-      })
-
       return {
         body: {
           code: 803,
           message: "授权登录成功"
         },
-        cookie: filteredCookie,
-        expireTime: (Number(allCookies.musickeyCreateTime) || 0) + 259200 // MUSICKEY 有效期 3 天
+        cookie: result.cookie
       }
     case 'expired':
       // 二维码过期

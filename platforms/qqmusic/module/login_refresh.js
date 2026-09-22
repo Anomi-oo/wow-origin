@@ -1,15 +1,32 @@
-const { refreshQQMusicCookies } = require('../util/qm_refresh_key')
+const { loginCgi, credentialCookies, loginError } = require('../util/login-http')
+const validateCookie = require('./login_cookie')
+const { hash33 } = require('../util/qq-login')
 
-module.exports = async (query, request) => {
-  const result = await refreshQQMusicCookies(query)
-  if ( !result.ok ) {
-    throw new Error('刷新 QQ 音乐登录状态失败')
+module.exports = async (query) => {
+  const musicid = String(query.musicid || query.uin || '').replace(/^o/, '')
+  const musickey = query.musickey || query.qm_keyst
+  if (!/^[1-9]\d*$/.test(musicid) || !musickey) throw new Error('QQ 登录凭证不完整')
+  // Browser cookies usually lack refresh credentials. Validate without attempting OAuth refresh.
+  if (!query.refresh_key && !query.refresh_token) {
+    await validateCookie({ uin: musicid, qm_keyst: musickey })
+    return { refreshed: false }
   }
-
-  return {
-    code: 200,
-    cookie: result.tokens,
-    refreshed: result.refreshed,
-    expireTime: Number(result.tokens?.musickeyCreateTime + result.tokens.keyExpiresIn) // MUSICKEY 有效期 3 天
+  const loginType = Number(query.loginType ?? 2)
+  if (![0, 1, 2, 6].includes(loginType)) throw new Error('不支持的 QQ 登录凭证类型')
+  const result = await loginCgi('music.login.LoginServer', 'Login', {
+    openid: query.openid || '', access_token: query.access_token || '',
+    refresh_token: query.refresh_token || '', refresh_key: query.refresh_key || '',
+    unionid: query.unionid || '', expired_in: Number(query.expired_at) || 0,
+    musicid: Number(musicid), str_musicid: musicid, musickey, loginMode: 2,
+  }, {
+    ct: 24, cv: 4747474, platform: 'yqq.json', uin: musicid,
+    authst: musickey, g_tk: hash33(musickey, 5381), tmeLoginType: loginType,
+  })
+  if (result.code !== 0) {
+    // Some valid sessions cannot refresh yet. Check the old credential before retaining it.
+    if (result.code !== 20279) throw loginError(result.code)
+    await validateCookie({ uin: musicid, qm_keyst: musickey })
+    return { refreshed: false }
   }
+  return { cookie: credentialCookies({ loginType, ...result.data }), refreshed: true }
 }

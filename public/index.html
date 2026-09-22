@@ -58,14 +58,14 @@
         <header class="page-header">
           <p class="eyebrow">ACCOUNT</p>
           <h1>账号登录</h1>
-          <p>通过 QQ 音乐或网易云音乐扫码创建账号，也可以管理已有账号。</p>
+          <p>登录 QQ 音乐或网易云音乐，也可以管理已有账号。</p>
         </header>
 
         <article class="card login-card">
           <div id="login-choose" class="login-step">
             <h2>选择操作</h2>
             <div class="button-stack">
-              <button id="choose-create" class="button primary" type="button">扫码添加新账号</button>
+              <button id="choose-create" class="button primary" type="button">添加新账号</button>
               <button id="choose-update" class="button secondary" type="button">更新已存在账号</button>
             </div>
           </div>
@@ -80,13 +80,36 @@
           </div>
 
           <div id="login-scan" class="login-step hidden">
-            <div class="card-title-row"><h2>扫码登录</h2><span id="scan-platform-label" class="badge"></span></div>
+            <div class="card-title-row"><h2 id="login-title">登录账号</h2><span id="scan-platform-label" class="badge"></span></div>
             <div id="platform-switch" class="segment">
               <button data-platform="qq" type="button">QQ 音乐</button>
               <button data-platform="netease" type="button">网易云音乐</button>
             </div>
-            <div class="qr-frame login-qr"><img id="login-qr" alt="账号登录二维码"><span id="qr-placeholder">正在生成二维码…</span></div>
-            <p id="scan-message" class="message">准备扫码登录</p>
+            <div id="qr-login-panel">
+              <div class="qr-frame login-qr"><img id="login-qr" alt="账号登录二维码"><span id="qr-placeholder">正在生成二维码…</span></div>
+              <p id="scan-message" class="message" aria-live="polite">准备扫码登录</p>
+            </div>
+            <form id="phone-login-panel" class="hidden">
+              <div class="phone-fields">
+                <label class="field"><span>区号</span><input id="phone-country" inputmode="numeric" value="86" maxlength="4" required pattern="[1-9][0-9]{0,3}"></label>
+                <label class="field"><span>手机号</span><input id="phone-number" type="tel" autocomplete="tel-national" placeholder="输入手机号" required pattern="[0-9]{6,15}"></label>
+              </div>
+              <label class="field"><span>短信验证码</span><div class="copy-row"><input id="phone-code" inputmode="numeric" autocomplete="one-time-code" placeholder="输入验证码" required pattern="[0-9]{4,8}"><button id="phone-send" class="icon-button" type="button">获取验证码</button></div></label>
+              <p id="phone-message" class="message" aria-live="polite"></p>
+              <div id="phone-captcha" class="hidden">
+                <iframe id="phone-captcha-frame" title="QQ 安全验证" sandbox="allow-scripts allow-forms" referrerpolicy="no-referrer"></iframe>
+                <p class="message">验证完成后，请再次点击「获取验证码」。</p>
+              </div>
+              <div class="button-row"><button id="phone-submit" class="button primary" type="submit">登录</button></div>
+            </form>
+            <form id="cookie-login-panel" class="hidden">
+              <label class="field"><span>Cookie</span><textarea id="login-cookie" rows="5" autocomplete="off" spellcheck="false" placeholder="粘贴该平台完整的 Cookie" maxlength="16384" required></textarea></label>
+              <div class="button-row"><button id="cookie-submit" class="button primary" type="submit">登录</button></div>
+            </form>
+            <div id="login-methods" class="login-methods" role="group" aria-label="其他登录方式">
+              <button data-method="qr" class="hidden" type="button">扫码登录</button>
+              <button data-method="cookie" type="button">Cookie 登录</button>
+            </div>
             <div class="button-row">
               <button id="scan-back" class="button secondary" type="button">返回</button>
               <button id="regenerate-qr" class="button primary" type="button">刷新二维码</button>
@@ -115,7 +138,7 @@
             <p id="config-message" class="message"></p>
             <div class="button-row wrap">
               <button class="button secondary back-choose" type="button">返回选择</button>
-              <button id="relogin" class="button secondary" type="button">重新扫码登录</button>
+              <button id="relogin" class="button secondary" type="button">重新登录</button>
               <button id="save-config" class="button primary" type="button">保存配置</button>
             </div>
           </div>

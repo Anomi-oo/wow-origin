@@ -1,4 +1,4 @@
-const { startLogin } = require('../util/qq_qr_login_2step')
+const { startLogin } = require('../util/qq-login')
 
 module.exports = async (query, request) => {
   const { qrcode, token } = await startLogin()

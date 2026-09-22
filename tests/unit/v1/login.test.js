@@ -46,6 +46,143 @@ describe('login router', () => {
     logSpy.mockRestore()
   })
 
+  test.each([
+    ['qq', 'qqmusic', 'Cookie: qqmusic_uin=123; qqmusic_key=secret', 'login/cookie', { nickname: 'QQ 用户' }],
+    ['netease', 'netease', 'MUSIC_U=secret', 'user/detail', { nickname: '网易用户', userId: 456 }]
+  ])('%s Cookie 校验成功后持久化且不返回 Cookie', async (platform, resource, cookie, route, profile) => {
+    const workDir = makeWorkDir()
+    const callModule = jest.fn(async () => ({ code: 200, body: profile }))
+    const factory = { getPlatform: jest.fn(() => ({ callModule })) }
+    const { app, registry } = createApp(workDir, factory)
+    const response = await request(app).post('/login/api/cookie').send({ mode: 'create', platform, cookie }).expect(200)
+    expect(factory.getPlatform).toHaveBeenCalledWith(resource)
+    expect(callModule).toHaveBeenCalledWith(route, expect.any(Object))
+    expect(response.headers['cache-control']).toBe('no-store')
+    expect(response.body.data).toMatchObject({ status: 'success', accountName: profile.nickname, platform })
+    expect(JSON.stringify(response.body)).not.toContain('secret')
+    const saved = registry.byAccessKey.get(response.body.data.apiAccessKey)
+    expect(saved.cookie).toContain(platform === 'qq' ? 'qm_keyst=secret' : 'MUSIC_U=secret')
+    expect(readAccounts(workDir)).toHaveLength(2)
+  })
+
+  test('Cookie 更新保留原来的 key、名称和账号配置', async () => {
+    const workDir = makeWorkDir()
+    const { app, registry } = createApp(workDir, { getPlatform: () => ({ callModule: async () => ({ code: 200, body: { nickname: '新昵称' } }) }) })
+    await request(app).post('/login/api/cookie').send({ mode: 'update', api_access_key: 'key-1', cookie: 'uin=123; qm_keyst=new' }).expect(200)
+    expect(registry.byAccessKey.get('key-1')).toMatchObject({ name: 'QQ', cookie: 'uin=123; qm_keyst=new', stateless: true })
+    expect(readAccounts(workDir)).toHaveLength(1)
+  })
+
+  test.each(['', 'uin=123', 'uin=123; qm_keyst=x\r\nother: header'])('拒绝无效 Cookie 且不调用上游', async cookie => {
+    const workDir = makeWorkDir()
+    const callModule = jest.fn()
+    const { app } = createApp(workDir, { getPlatform: () => ({ callModule }) })
+    await request(app).post('/login/api/cookie').send({ mode: 'create', platform: 'qq', cookie }).expect(400)
+    expect(callModule).not.toHaveBeenCalled()
+    expect(readAccounts(workDir)).toHaveLength(1)
+  })
+
+  test('过期 Cookie 不覆盖已有凭证', async () => {
+    const workDir = makeWorkDir()
+    const { app, registry } = createApp(workDir, { getPlatform: () => ({ callModule: async () => ({ code: 500, message: 'Cookie 已过期' }) }) })
+    await request(app).post('/login/api/cookie').send({ mode: 'update', api_access_key: 'key-1', cookie: 'uin=123; qm_keyst=expired' }).expect(502)
+    expect(registry.byAccessKey.get('key-1').cookie).toBe('old_cookie')
+  })
+
+  test('网易 Cookie 无用户身份时不创建账号', async () => {
+    const workDir = makeWorkDir()
+    const { app } = createApp(workDir, { getPlatform: () => ({ callModule: async () => ({ code: 200, body: {} }) }) })
+    await request(app).post('/login/api/cookie').send({ mode: 'create', platform: 'netease', cookie: 'MUSIC_U=expired' }).expect(400)
+    expect(readAccounts(workDir)).toHaveLength(1)
+  })
+
+  test.each(['qq', 'netease'])('%s 手机登录校验成功后保存账号，token 不能复用', async (platform) => {
+    const workDir = makeWorkDir()
+    const callModule = jest.fn(async route => {
+      if (route === 'login/phone/send') return { code: 200, body: { status: 'sent', token: 'phone-token', retryAfter: 60 } }
+      if (route === 'login/phone/check') return { code: 200, cookie: platform === 'qq' ? { uin: '123', qm_keyst: 'phone-secret', loginType: '0' } : { MUSIC_U: 'netease-secret' } }
+      return { code: 200, nickname: '手机用户' }
+    })
+    const factory = { getPlatform: jest.fn(() => ({ callModule })) }
+    const { app } = createApp(workDir, factory)
+    await request(app).post('/login/api/phone/send').send({ mode: 'create', platform, phone: '13800000000' }).expect(200)
+    const response = await request(app).post('/login/api/phone/check').send({ token: 'phone-token', code: '123456' }).expect(200)
+    expect(response.body.data).toMatchObject({ status: 'success', accountName: '手机用户', platform })
+    expect(factory.getPlatform.mock.calls.every(([name]) => name === (platform === 'qq' ? 'qqmusic' : 'netease'))).toBe(true)
+    expect(readAccounts(workDir)).toHaveLength(2)
+    await request(app).post('/login/api/phone/check').send({ token: 'phone-token', code: '123456' }).expect(400)
+  })
+
+  test('手机会话不能在重发时切换平台，校验也不能指定其他平台', async () => {
+    const workDir = makeWorkDir()
+    const callModule = jest.fn(async () => ({ code: 200, body: { status: 'sent', token: 'phone-token' } }))
+    const { app } = createApp(workDir, { getPlatform: () => ({ callModule }) })
+    await request(app).post('/login/api/phone/send').send({ mode: 'create', platform: 'qq', phone: '13800000000' }).expect(200)
+    await request(app).post('/login/api/phone/send').send({ mode: 'create', platform: 'netease', phone: '13800000000', token: 'phone-token' }).expect(400)
+    await request(app).post('/login/api/phone/check').send({ platform: 'netease', token: 'phone-token', code: '123456' }).expect(400)
+    expect(callModule).toHaveBeenCalledTimes(1)
+  })
+
+  test('QQ 安全验证使用受限代理页，避免官方脚本在 iframe 中跳转顶层页面', async () => {
+    const workDir = makeWorkDir()
+    const securityUrl = 'https://c.y.qq.com/r/fy6U?tokenValid=opaque-upstream-token&appid=50910'
+    const callModule = jest.fn(async () => ({ code: 200, body: {
+      status: 'captcha', token: 'phone-token', securityUrl, retryAfter: 0
+    } }))
+    const { app } = createApp(workDir, { getPlatform: () => ({ callModule }) })
+    const send = await request(app).post('/login/api/phone/send')
+      .send({ mode: 'create', platform: 'qq', phone: '13800000000' }).expect(200)
+    expect(send.body.data).toMatchObject({
+      status: 'captcha', token: 'phone-token', securityPath: '/login/api/phone/captcha?token=phone-token'
+    })
+    expect(send.body.data).not.toHaveProperty('securityUrl')
+
+    const musicUrl = 'https://y.qq.com/lib/commercial/h5/music-2.3.0.min.js?version=20210918&max_age=604800'
+    const remoteHtml = `<!doctype html><html><head><script src="${musicUrl}"></script></head><body><script>new SafetyCaptcha({ verifyUrl: window.location.href });</script></body></html>`
+    const musicScript = 'window===window.top||window.allowIframe||(top.location=self.location),/http:|https:/.test(location.protocol)&&!/qq\\.com/.test(location.hostname)&&(location.href=location.protocol+"//m.y.qq.com/?ADTAG=hostname_err"),window.MusicReady=true;'
+    const fetchSpy = jest.spyOn(global, 'fetch')
+      .mockResolvedValueOnce({
+        ok: true, url: 'https://y.qq.com/m/client/safety_captcha/index.html', headers: new Headers(),
+        text: async () => remoteHtml,
+      })
+      .mockResolvedValueOnce({
+        ok: true, url: musicUrl, headers: new Headers(),
+        text: async () => musicScript,
+      })
+    const frame = await request(app).get(send.body.data.securityPath).expect(200)
+    expect(fetchSpy).toHaveBeenCalledWith(securityUrl, expect.objectContaining({ redirect: 'follow' }))
+    expect(frame.headers['content-type']).toContain('text/html')
+    expect(frame.headers['content-security-policy']).toContain("script-src https: 'unsafe-inline' 'unsafe-eval' blob:")
+    expect(fetchSpy).toHaveBeenCalledWith(musicUrl, expect.objectContaining({ redirect: 'follow' }))
+    expect(frame.text.indexOf('window.allowIframe=true')).toBeLessThan(frame.text.indexOf('window.MusicReady=true'))
+    expect(frame.text).not.toContain('src="https://y.qq.com/lib/commercial/h5/music-2.3.0.min.js')
+    expect(frame.text).not.toContain('ADTAG=hostname_err')
+    expect(frame.text).toContain(`verifyUrl: ${JSON.stringify(securityUrl)}`)
+    expect(frame.text).not.toContain('verifyUrl: window.location.href')
+    fetchSpy.mockRestore()
+  })
+
+  test('安全验证代理拒绝非 QQ 地址和未知会话', async () => {
+    const workDir = makeWorkDir()
+    const callModule = jest.fn(async () => ({ code: 200, body: {
+      status: 'captcha', token: 'phone-token', securityUrl: 'https://example.com/verify', retryAfter: 0
+    } }))
+    const { app } = createApp(workDir, { getPlatform: () => ({ callModule }) })
+    await request(app).post('/login/api/phone/send')
+      .send({ mode: 'create', platform: 'qq', phone: '13800000000' }).expect(502)
+    await request(app).get('/login/api/phone/captcha?token=missing').expect(400)
+  })
+
+  test('更新账号的手机 token 必须绑定原账号，不能变成新建会话', async () => {
+    const workDir = makeWorkDir()
+    const callModule = jest.fn(async () => ({ code: 200, body: { status: 'sent', token: 'phone-token' } }))
+    const { app } = createApp(workDir, { getPlatform: () => ({ callModule }) })
+    await request(app).post('/login/api/phone/send').send({ mode: 'update', api_access_key: 'key-1', phone: '13800000000' }).expect(200)
+    await request(app).post('/login/api/phone/check').send({ token: 'phone-token', code: '123456' }).expect(400)
+    await request(app).post('/login/api/phone/send').send({ mode: 'create', platform: 'qq', token: 'phone-token', phone: '13800000000' }).expect(400)
+    expect(callModule).toHaveBeenCalledTimes(1)
+  })
+
   test('GET /login 返回登录页面', async () => {
     const workDir = makeWorkDir()
     const { app } = createApp(workDir, {
@@ -57,7 +194,12 @@ describe('login router', () => {
       .expect(200)
 
     expect(response.text).toContain('扫码登录')
-    expect(response.text).toContain('扫码添加新账号')
+    expect(response.text).toContain('添加新账号')
+    expect(response.text).not.toContain('<button data-method="phone"')
+    expect(response.text).toContain('Cookie 登录')
+    expect(response.text).toContain('id="login-methods" class="login-methods"')
+    expect(response.text).not.toContain('class="segment login-methods"')
+    expect(response.text.indexOf('id="login-methods"')).toBeGreaterThan(response.text.indexOf('id="qr-login-panel"'))
     expect(response.text).toContain('更新已存在账号')
     expect(response.text).toContain('id="account-config" class="login-step hidden"')
     expect(response.text).toContain('id="account-origin-qr"')

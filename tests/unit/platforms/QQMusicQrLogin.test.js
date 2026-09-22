@@ -1,99 +1,83 @@
-const mockHttp = jest.fn()
+const { responseCookies } = require('../../../platforms/qqmusic/util/login-http')
 
-jest.mock('got', () => ({
-  extend: jest.fn(() => mockHttp)
-}))
-
-const qrLogin = require('../../../platforms/qqmusic/util/qq_qr_login_2step')
-
-describe('QQ Music QR login OAuth', () => {
-  afterEach(() => {
-    mockHttp.mockReset()
+describe('shared QQ QR login', () => {
+  let qr, http
+  beforeEach(() => {
+    jest.resetModules()
+    qr = require('../../../platforms/qqmusic/util/qq-login')
+    http = jest.spyOn(global, 'fetch').mockRejectedValue(new Error('Unmocked request'))
   })
+  afterEach(() => jest.restoreAllMocks())
+  function start() {
+    http.mockResolvedValueOnce(new Response('image', { headers: { 'set-cookie': 'qrsig=qr-session; Path=/' } }))
+    return qr.startLogin()
+  }
+  function callback(code = '0') {
+    return new Response(`ptuiCB('${code}','0','https://ssl.ptlogin2.graph.qq.com/check_sig?uin=123&ptsigx=sig','0','message','QQ');`)
+  }
 
-  test('使用当前 QQ 音乐允许的回跳地址', () => {
-    expect(qrLogin._testing.redirectUri).toBe(
-      'https://y.qq.com/portal/wx_redirect.html?login_type=1&surl=https://y.qq.com/'
-    )
+  test.each(['query', 'fragment'])('exchanges %s code using graph cookies and normalized music credentials', async (kind) => {
+    const started = await start()
+    http.mockResolvedValueOnce(callback())
+      .mockResolvedValueOnce(new Response('', { status: 302, headers: {
+        'set-cookie': 'pt_oauth_token=oauth; Expires=Wed, 21 Oct 2030 07:28:00 GMT; Path=/, p_skey=graph-secret; Path=/',
+      } }))
+      .mockResolvedValueOnce(new Response('', { status: 302, headers: {
+        location: `https://y.qq.com/callback${kind === 'query' ? '?' : '#'}code=abc%2F123&state=state`,
+      } }))
+      .mockResolvedValueOnce(Response.json({ code: 0, req_0: { code: 0, data: { str_musicid: '999', musickey: 'music-key' } } }))
+    expect(await qr.pollLogin(started.token)).toMatchObject({ status: 'done', cookie: { uin: '999', qm_keyst: 'music-key' } })
+    const [checkUrl, checkOptions] = http.mock.calls[2]
+    expect(checkUrl.origin).toBe('https://ssl.ptlogin2.graph.qq.com')
+    expect(checkUrl.searchParams.get('pt_3rd_aid')).toBe('100497308')
+    expect(checkOptions.redirect).toBe('manual')
+    const oauth = http.mock.calls[3][1]
+    expect(oauth.headers.Cookie).toContain('p_skey=graph-secret')
+    expect(oauth.headers.Cookie).toContain('pt_oauth_token=oauth')
+    const form = new URLSearchParams(oauth.body)
+    expect(form.get('g_tk')).toBe(String(qr.hash33('graph-secret', 5381)))
+    expect(form.get('redirect_uri')).toBe('https://y.qq.com/portal/wx_redirect.html?login_type=1&surl=https://y.qq.com/')
+    expect(JSON.parse(http.mock.calls[4][1].body).req_0).toEqual({ module: 'QQConnectLogin.LoginServer', method: 'QQLogin', param: { code: 'abc/123' } })
+    expect(await qr.pollLogin(started.token)).toEqual({ status: 'expired' })
   })
-
-  test.each([
-    ['query', 'https://y.qq.com/callback?code=abc%2F123&state=ok'],
-    ['fragment', 'https://y.qq.com/callback#code=abc%2F123&state=ok'],
-    ['encoded redirect', 'https://graph.qq.com/jump?url=https%3A%2F%2Fy.qq.com%2Fcallback%3Fcode%3Dabc%252F123%26state%3Dok']
-  ])('从 %s 回跳中提取授权 code', (_name, location) => {
-    expect(qrLogin._testing.extractAuthorizationCode(location)).toBe('abc/123')
+  test.each([['66', 'waiting'], ['67', 'confirming'], ['65', 'expired'], ['68', 'expired']])('maps status %s', async (code, status) => {
+    const { token } = await start()
+    http.mockResolvedValueOnce(callback(code))
+    expect(await qr.pollLogin(token)).toEqual({ status })
   })
-
-  test('跨 QQ 登录域名携带二维码会话 Cookie 并取得授权 code', async () => {
-    let checkSigCookie = ''
-
-    mockHttp.mockImplementation(async (url, options = {}) => {
-      const href = String(url)
-      if (href.includes('/cgi-bin/xlogin')) {
-        return { statusCode: 200, headers: {}, body: '' }
-      }
-      if (href.includes('/ssl/ptqrshow')) {
-        return {
-          statusCode: 200,
-          headers: { 'set-cookie': ['qrsig=qr-session; Domain=.ptlogin2.qq.com; Path=/'] },
-          body: Buffer.from('qr')
-        }
-      }
-      if (href.includes('/ssl/ptqrlogin')) {
-        return {
-          statusCode: 200,
-          headers: { 'set-cookie': ['pt_login_sig=login-session; Domain=.ptlogin2.qq.com; Path=/'] },
-          body: "ptuiCB('0','0','https://ssl.ptlogin2.graph.qq.com/check_sig?uin=1&ptsigx=sig','0','登录成功','QQ');"
-        }
-      }
-      if (href.includes('/check_sig')) {
-        checkSigCookie = String(options.headers?.Cookie || '')
-        const hasQrSession = checkSigCookie.includes('qrsig=qr-session')
-        return {
-          statusCode: 302,
-          headers: {
-            location: 'https://graph.qq.com/oauth2.0/login_jump',
-            ...(hasQrSession
-              ? { 'set-cookie': ['p_skey=graph-secret; Path=/'] }
-              : {})
-          },
-          body: ''
-        }
-      }
-      if (href.includes('/oauth2.0/login_jump') || href.includes('/oauth2.0/show')) {
-        return { statusCode: 200, headers: {}, body: '' }
-      }
-      if (href.includes('/oauth2.0/authorize')) {
-        const hasGraphSession = String(options.headers?.Cookie || '').includes('p_skey=graph-secret')
-        return {
-          statusCode: 302,
-          headers: {
-            location: hasGraphSession
-              ? 'https://y.qq.com/callback?code=oauth-code&state=state'
-              : 'https://graph.qq.com/oauth2.0/error?error=invalid_session'
-          },
-          body: ''
-        }
-      }
-      if (href.includes('u.y.qq.com/cgi-bin/musicu.fcg')) {
-        return {
-          statusCode: 200,
-          headers: {},
-          body: JSON.stringify({ code: 0, req: { code: 0, data: { musickey: 'music-key' } } })
-        }
-      }
-      if (href.startsWith('https://y.qq.com/')) {
-        return { statusCode: 200, headers: {}, body: '' }
-      }
-      throw new Error(`Unexpected request: ${href}`)
-    })
-
-    const started = await qrLogin.startLogin()
-    const result = await qrLogin.pollLogin(started.token)
-
-    expect(checkSigCookie).toContain('qrsig=qr-session')
-    expect(checkSigCookie).toContain('pt_login_sig=login-session')
-    expect(result.status).toBe('done')
+  test('does not expire after a short idle period and coalesces concurrent polls', async () => {
+    const now = Date.now()
+    const { token } = await start()
+    jest.spyOn(Date, 'now').mockReturnValue(now + 20000)
+    let resolve
+    http.mockImplementationOnce(() => new Promise(r => { resolve = r }))
+    const first = qr.pollLogin(token)
+    expect(await qr.pollLogin(token)).toEqual({ status: 'confirming' })
+    resolve(callback('66'))
+    expect(await first).toEqual({ status: 'waiting' })
+  })
+  test('expires old tokens without network requests', async () => {
+    const { token } = await start()
+    jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 131000)
+    expect(await qr.pollLogin(token)).toEqual({ status: 'expired' })
+    expect(http).toHaveBeenCalledTimes(1)
+  })
+  test('missing p_skey is a terminal stage-specific error', async () => {
+    const { token } = await start()
+    http.mockResolvedValueOnce(callback()).mockResolvedValueOnce(new Response('', { status: 302 }))
+    expect(await qr.pollLogin(token)).toMatchObject({ status: 'error', msg: expect.stringContaining('p_skey') })
+    expect(await qr.pollLogin(token)).toEqual({ status: 'expired' })
+  })
+  test('network failure does not expose credential-bearing URL', async () => {
+    const { token } = await start()
+    http.mockRejectedValueOnce(new Error('https://example.com/?secret=private-value'))
+    const result = await qr.pollLogin(token)
+    expect(result.status).toBe('error')
+    expect(result.msg).not.toContain('private-value')
+  })
+  test('parses combined and separate Set-Cookie without breaking Expires', () => {
+    const combined = 'one=1; Expires=Wed, 21 Oct 2030 07:28:00 GMT; Path=/, p_skey=a=b; Path=/'
+    expect(responseCookies({ get: () => combined })).toEqual({ one: '1', p_skey: 'a=b' })
+    expect(responseCookies({ getSetCookie: () => ['one=1; Path=/', 'p_skey=a=b; Path=/'] })).toEqual({ one: '1', p_skey: 'a=b' })
   })
 })

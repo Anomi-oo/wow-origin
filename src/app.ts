@@ -20,7 +20,7 @@ const platformFactory = require('../platforms/PlatformFactory');
 const NeteasePlatform = require('../platforms/netease/NeteasePlatform');
 const QQMusicPlatform = require('../platforms/qqmusic/QQMusicPlatform');
 
-const INTERNAL_RESOURCE_ROUTES = new Set(['login/refresh']);
+const INTERNAL_RESOURCE_ROUTES = new Set(['login/refresh', 'login/phone/send', 'login/phone/check', 'login/cookie']);
 
 class MultiPlatformServer {
   private app: Express | null = null;

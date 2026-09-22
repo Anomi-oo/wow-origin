@@ -2,7 +2,8 @@
   const $ = (id) => document.getElementById(id);
   const state = {
     apiBase: '', page: 'home', mode: '', platform: 'qq', token: '', timer: null,
-    accountQrTimer: null, accountQrSequence: 0, account: null, status: null
+    accountQrTimer: null, accountQrSequence: 0, account: null, status: null,
+    method: 'qr', loginSequence: 0, phoneToken: '', phoneRetryAt: 0, phoneTimer: null
   };
 
   function isTauri() { return Boolean(window.__TAURI__?.core?.invoke); }
@@ -85,6 +86,7 @@
 
   function navigate(page, updateLocation = true) {
     if (!isTauri() && page === 'home') page = 'login';
+    if (page !== 'login') backToChoose();
     state.page = page;
     document.body.dataset.page = page;
     $('home-page').classList.toggle('hidden', page !== 'home');
@@ -102,12 +104,24 @@
     $('login-error').textContent = '';
     updateAccountNavigationActive();
   }
-  function stopPolling() { if (state.timer) clearInterval(state.timer); state.timer = null; }
-  function backToChoose() { stopPolling(); state.mode = ''; state.token = ''; state.account = null; showStep('login-choose'); }
+  function stopPolling() { if (state.timer) clearTimeout(state.timer); state.timer = null; state.token = ''; state.loginSequence += 1; }
+  function clearLoginInputs() {
+    state.phoneToken = ''; $('phone-code').value = ''; $('login-cookie').value = '';
+    clearPhoneCaptcha();
+  }
+  function clearPhoneCaptcha() {
+    $('phone-captcha').classList.add('hidden');
+    $('phone-captcha-frame').removeAttribute('src');
+  }
+  function backToChoose() { stopPolling(); clearLoginInputs(); state.mode = ''; state.account = null; showStep('login-choose'); }
   function setPlatform(platform) {
     state.platform = platform;
     document.querySelectorAll('#platform-switch button').forEach((button) => button.classList.toggle('active', button.dataset.platform === platform));
     $('scan-platform-label').textContent = platform === 'qq' ? 'QQ 音乐' : '网易云音乐';
+    document.querySelectorAll('#login-methods button').forEach((button) => {
+      const method = button.dataset.method;
+      button.classList.toggle('hidden', method === state.method);
+    });
   }
   function showError(error) { $('login-error').textContent = error.message || String(error); }
 
@@ -119,7 +133,8 @@
     } catch (error) { showError(error); } finally { setBusy(button, false); }
   }
   async function startScan() {
-    stopPolling(); showStep('login-scan');
+    prepareLogin('qr');
+    const sequence = state.loginSequence;
     $('login-qr').removeAttribute('src'); $('qr-placeholder').classList.remove('hidden');
     $('scan-message').textContent = '正在生成二维码…';
     $('platform-switch').classList.toggle('locked', state.mode === 'update'); setPlatform(state.platform);
@@ -127,24 +142,100 @@
       const body = { mode: state.mode, platform: state.platform };
       if (state.mode === 'update') body.api_access_key = state.account.apiAccessKey;
       const data = await jsonRequest('/login/api/start', 'POST', body);
+      if (sequence !== state.loginSequence) return;
       state.token = data.token; state.platform = data.platform; setPlatform(data.platform);
       $('login-qr').src = data.qrImage; $('qr-placeholder').classList.add('hidden');
       $('scan-message').textContent = data.platform === 'qq' ? '请使用手机 QQ 扫码' : '请使用网易云音乐扫码';
-      state.timer = setInterval(checkLogin, 1000);
-    } catch (error) { $('scan-message').textContent = '二维码生成失败'; showError(error); }
+      state.timer = setTimeout(checkLogin, 1500);
+    } catch (error) { if (sequence === state.loginSequence) { $('scan-message').textContent = '二维码生成失败'; showError(error); } }
   }
   async function checkLogin() {
     if (!state.token) return;
+    const sequence = state.loginSequence;
     try {
       const data = await jsonRequest('/login/api/check', 'POST', { token: state.token });
+      if (sequence !== state.loginSequence) return;
       $('scan-message').textContent = data.message;
       if (data.status === 'success') { stopPolling(); showAccount(data); }
       else if (data.status === 'expired' || data.status === 'error') stopPolling();
-    } catch (error) { stopPolling(); showError(error); }
+      else state.timer = setTimeout(checkLogin, 1500);
+    } catch (error) { if (sequence === state.loginSequence) { stopPolling(); showError(error); } }
+  }
+
+  function loginBody() {
+    return { mode: state.mode, platform: state.platform, ...(state.mode === 'update' ? { api_access_key: state.account.apiAccessKey } : {}) };
+  }
+  function prepareLogin(method) {
+    stopPolling();
+    state.method = method;
+    const accountName = state.account?.name || state.account?.accountName || '';
+    $('login-title').textContent = state.mode === 'update'
+      ? `重新登录账号${accountName ? ` ${accountName}` : ''}`
+      : '登录账号';
+    state.phoneToken = '';
+    $('phone-code').value = '';
+    $('login-cookie').value = '';
+    $('phone-message').textContent = '';
+    clearPhoneCaptcha();
+    showStep('login-scan');
+    setPlatform(state.platform);
+    $('platform-switch').classList.toggle('locked', state.mode === 'update');
+    for (const item of ['qr', 'phone', 'cookie']) $(`${item}-login-panel`).classList.toggle('hidden', item !== method);
+    $('regenerate-qr').classList.toggle('hidden', method !== 'qr');
+  }
+  function selectLoginMethod(method) {
+    if (method === 'qr') startScan(); else prepareLogin(method);
+  }
+  function updatePhoneCooldown() {
+    const seconds = Math.max(0, Math.ceil((state.phoneRetryAt - Date.now()) / 1000));
+    $('phone-send').disabled = seconds > 0;
+    $('phone-send').textContent = seconds ? `${seconds} 秒后重发` : '获取验证码';
+    if (state.phoneTimer) clearTimeout(state.phoneTimer);
+    state.phoneTimer = seconds ? setTimeout(updatePhoneCooldown, 1000) : null;
+  }
+  async function sendPhoneCode() {
+    if ($('phone-send').disabled) return;
+    if (!$('phone-number').reportValidity() || !$('phone-country').reportValidity()) return;
+    const sequence = state.loginSequence;
+    const button = $('phone-send'); setBusy(button, true, '发送中…');
+    $('login-error').textContent = '';
+    try {
+      const data = await jsonRequest('/login/api/phone/send', 'POST', {
+        ...loginBody(), phone: $('phone-number').value.trim(), countryCode: $('phone-country').value.trim(), token: state.phoneToken,
+      });
+      if (sequence !== state.loginSequence) return;
+      if (data.token) state.phoneToken = data.token;
+      state.phoneRetryAt = data.status === 'captcha' ? 0 : Date.now() + (data.retryAfter ?? 60) * 1000;
+      $('phone-message').textContent = data.status === 'sent' ? '验证码已发送' : data.status === 'captcha' ? '请先完成 QQ 安全验证' : '发送过于频繁，请稍后重试';
+      if (data.status === 'captcha' && /^\/login\/api\/phone\/captcha\?token=/.test(data.securityPath)) {
+        $('phone-captcha-frame').src = apiUrl(data.securityPath);
+        $('phone-captcha').classList.remove('hidden');
+      } else if (data.status !== 'captcha') clearPhoneCaptcha();
+    } catch (error) { if (sequence === state.loginSequence) showError(error); }
+    finally { setBusy(button, false); updatePhoneCooldown(); }
+  }
+  async function submitManualLogin(method) {
+    const sequence = state.loginSequence;
+    const button = $(method === 'phone' ? 'phone-submit' : 'cookie-submit');
+    if (button.disabled) return;
+    setBusy(button, true, '正在登录…'); $('login-error').textContent = '';
+    try {
+      if (method === 'phone' && !state.phoneToken) throw new Error('请先获取短信验证码');
+      const data = await jsonRequest(method === 'phone' ? '/login/api/phone/check' : '/login/api/cookie', 'POST', {
+        ...loginBody(), ...(method === 'phone'
+          ? { token: state.phoneToken, code: $('phone-code').value.trim() }
+          : { cookie: $('login-cookie').value.trim() }),
+      });
+      if (sequence !== state.loginSequence) return;
+      $('login-cookie').value = ''; $('phone-code').value = ''; state.phoneToken = '';
+      showAccount(data);
+    } catch (error) { if (sequence === state.loginSequence) showError(error); }
+    finally { setBusy(button, false); }
   }
 
   function showAccount(account) {
     stopPolling(); state.account = account; state.mode = 'update'; state.platform = account.platform;
+    clearLoginInputs();
     $('account-platform').textContent = account.platform === 'qq' ? 'QQ 音乐' : '网易云音乐';
     $('account-key').textContent = account.apiAccessKey; $('account-name').value = account.name || account.accountName || '';
     $('account-stateless').checked = Boolean(account.stateless); $('account-luoxue').checked = account.useLuoxue !== false;
@@ -241,11 +332,14 @@
 
   async function openDesktopAccount(apiAccessKey) {
     if (!isTauri()) return;
+    stopPolling(); clearLoginInputs();
+    const sequence = state.loginSequence;
     navigate('login'); showStep('login-choose'); $('login-error').textContent = '正在加载账号配置…';
     try {
       const account = await jsonRequest('/login/api/verify-key', 'POST', { api_access_key: apiAccessKey });
+      if (sequence !== state.loginSequence) return;
       showAccount(account);
-    } catch (error) { showError(error); }
+    } catch (error) { if (sequence === state.loginSequence) showError(error); }
   }
   function renderSources(sources) {
     const list = $('lx-source-list'); list.replaceChildren();
@@ -288,7 +382,12 @@
   $('choose-update').addEventListener('click', () => showStep('login-verify'));
   document.querySelectorAll('.back-choose').forEach((button) => button.addEventListener('click', backToChoose));
   $('verify-submit').addEventListener('click', verifyAccount); $('verify-key').addEventListener('keydown', (event) => { if (event.key === 'Enter') verifyAccount(); });
-  document.querySelectorAll('#platform-switch button').forEach((button) => button.addEventListener('click', () => { if (state.platform !== button.dataset.platform) { setPlatform(button.dataset.platform); startScan(); } }));
+  document.querySelectorAll('#platform-switch button').forEach((button) => button.addEventListener('click', () => { if (state.mode !== 'update' && state.platform !== button.dataset.platform) { setPlatform(button.dataset.platform); selectLoginMethod(state.method); } }));
+  document.querySelectorAll('#login-methods button').forEach((button) => button.addEventListener('click', () => selectLoginMethod(button.dataset.method)));
+  $('phone-send').addEventListener('click', sendPhoneCode);
+  for (const id of ['phone-number', 'phone-country']) $(id).addEventListener('input', () => { state.phoneToken = ''; state.loginSequence += 1; clearPhoneCaptcha(); });
+  $('phone-login-panel').addEventListener('submit', (event) => { event.preventDefault(); submitManualLogin('phone'); });
+  $('cookie-login-panel').addEventListener('submit', (event) => { event.preventDefault(); submitManualLogin('cookie'); });
   $('scan-back').addEventListener('click', () => state.account ? showAccount(state.account) : backToChoose());
   $('regenerate-qr').addEventListener('click', startScan); $('relogin').addEventListener('click', startScan);
   $('add-lx-source').addEventListener('click', () => addSourceInput()); $('save-config').addEventListener('click', saveConfig);
