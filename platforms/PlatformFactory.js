@@ -19,6 +19,8 @@ class PlatformFactory {
     try {
       const platformInstance = new PlatformClass({ ...config, name })
       this.platforms.set(name, platformInstance)
+      // 注册会替换平台实例，新实例还没有加载模块，必须允许重新初始化。
+      this.initialized = false
 
       console.log(`Platform ${name} registered successfully`)
       return true

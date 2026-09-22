@@ -28,8 +28,7 @@ const DAID = 383;
 const PT_3RD_AID = 100497308; // QQ音乐 QQ 互联 appid
 const S_URL = 'https://graph.qq.com/oauth2.0/login_jump';
 const YQQ_REDIRECT_URI =
-  'https://y.qq.com/portal/wx_redirect.html?login_type=1&surl=' +
-  encodeURIComponent('https://y.qq.com/?ADTAG=myqq#type=index');
+  'https://y.qq.com/portal/wx_redirect.html?login_type=1&surl=https://y.qq.com/';
 
 const XLOGIN_URL =
   `https://xui.ptlogin2.qq.com/cgi-bin/xlogin?appid=${APPID}&daid=${DAID}&style=33&login_text=%E7%99%BB%E5%BD%95&hide_title_bar=1&hide_border=1&target=self&s_url=${encodeURIComponent(S_URL)}&pt_3rd_aid=${PT_3RD_AID}&pt_feedback_link=${encodeURIComponent('https://support.qq.com/products/77942?customInfo=.appid' + PT_3RD_AID)}&theme=2&verify_theme=`;
@@ -125,6 +124,37 @@ function parsePtuiCB(body) {
   const m = [...String(body).matchAll(/'([^']*)'/g)].map((x) => x[1]);
   if (!m.length) throw new Error('无法解析 ptuiCB 返回: ' + String(body).slice(0, 200));
   return { code: m[0], url: m[2] || '', msg: m[4] || '', nickname: m[5] || '' };
+}
+function extractAuthorizationCode(location) {
+  const pending = [String(location || '')];
+  const visited = new Set();
+
+  while (pending.length > 0 && visited.size < 20) {
+    const candidate = pending.shift();
+    if (!candidate || visited.has(candidate)) continue;
+    visited.add(candidate);
+
+    try {
+      const url = new URL(candidate, 'https://graph.qq.com/');
+      const search = url.searchParams;
+      const fragment = new URLSearchParams(url.hash.replace(/^#/, ''));
+      const code = search.get('code') || fragment.get('code');
+      if (code) return code;
+
+      for (const value of [...search.values(), ...fragment.values()]) {
+        if (value) pending.push(value);
+      }
+    } catch (_) {
+      // 某些回跳参数只是编码后的 URL，继续尝试解码。
+    }
+
+    try {
+      const decoded = decodeURIComponent(candidate);
+      if (decoded !== candidate) pending.push(decoded);
+    } catch (_) {}
+  }
+
+  return null;
 }
 function uuidUpper() {
   const v = crypto.randomUUID
@@ -402,7 +432,7 @@ async function pollLogin(token) {
       body: form,
       headers: {
         Origin: 'https://graph.qq.com',
-        Referer: showUrl,
+        Referer: 'https://xui.ptlogin2.qq.com/',
         'Content-Type': 'application/x-www-form-urlencoded',
         'Upgrade-Insecure-Requests': '1',
         Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/*,*/*;q=0.8',
@@ -418,8 +448,7 @@ async function pollLogin(token) {
     }
     const loc = authRes.headers.location || '';
     const redirectUrl = new URL(loc, 'https://graph.qq.com').toString();
-    const u = new URL(redirectUrl);
-    const code = u.searchParams.get('code');
+    const code = extractAuthorizationCode(redirectUrl);
     if (!code) {
       session.status = 'error';
       session.msg = '未获取到 code';
@@ -441,7 +470,7 @@ async function pollLogin(token) {
     // 用 code 登录 QQ音乐，获取最终 Cookie
     await ensureYqqContextCookies(session);
     const payload = {
-      comm: { g_tk: 5381, platform: 'yqq', ct: 24, cv: 0 },
+      comm: { g_tk: 5381, platform: 'yqq', ct: 24, cv: 0, tmeLoginType: 2 },
       req: { module: 'QQConnectLogin.LoginServer', method: 'QQLogin', param: { code } },
     };
     const resMusic = await fetchWithSession(session, U_YQQ_MUSICU, {
@@ -510,5 +539,11 @@ async function pollLogin(token) {
   }
 }
 
-module.exports = { startLogin, pollLogin };
-
+module.exports = {
+  startLogin,
+  pollLogin,
+  _testing: {
+    redirectUri: YQQ_REDIRECT_URI,
+    extractAuthorizationCode,
+  },
+};

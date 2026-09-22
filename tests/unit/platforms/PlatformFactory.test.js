@@ -94,6 +94,18 @@ describe('PlatformFactory', () => {
       expect(result).toBe(true)
     })
 
+    test('Cloudflare 再次注册平台实例后会重新初始化', async () => {
+      platformFactory.register('test1', TestPlatform1, { name: 'test1' })
+      await platformFactory.initialize()
+
+      platformFactory.register('test1', TestPlatform1, { name: 'test1' })
+      await platformFactory.initialize()
+
+      const platform = platformFactory.getPlatform('test1')
+      expect(platform.initialized).toBe(true)
+      expect(platform.modules.has('test')).toBe(true)
+    })
+
     test('部分平台初始化失败不应该中断其他平台', async () => {
       platformFactory.register('test1', TestPlatform1, { name: 'test1' })
       platformFactory.register('failing', FailingPlatform, { name: 'failing' })
