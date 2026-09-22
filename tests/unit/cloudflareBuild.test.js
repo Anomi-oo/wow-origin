@@ -62,6 +62,7 @@ describe('Cloudflare-only build pipeline', () => {
 
     expect(wrangler).toContain('"new_sqlite_classes"')
     expect(wrangler).toContain('"nodejs_compat"')
+    expect(wrangler).toContain('"crons": ["0 17 * * *"]')
     expect(wrangler).not.toContain('"containers"')
     expect(packageJson.scripts.deploy).toBe('npm run cloudflare:deploy')
     expect(readme).toContain('https://deploy.workers.cloudflare.com/button')
@@ -79,5 +80,7 @@ describe('Cloudflare-only build pipeline', () => {
     expect(worker).not.toContain('NODE_SERVER_PORT')
     expect(worker).toContain("server.listen(0, '127.0.0.1'")
     expect(worker).toContain('handleAsNodeRequest(port, request, this.env)')
+    expect(worker).toContain('loginRefreshScheduler?.runNow()')
+    expect(worker).toContain("getByName('primary').refreshLogins()")
   })
 })

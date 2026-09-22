@@ -28,6 +28,28 @@ describe('QQ Cookie validation and credential refresh', () => {
     expect(body.comm.tmeLoginType).toBe('0')
     expect(body.req_0.param).toMatchObject({ loginMode: 2, musickey: 'old', refresh_key: 'refresh' })
   })
+  test.each([
+    [1, ['loginMode', 'musickey', 'openid', 'refresh_key', 'refresh_token', 'str_musicid', 'unionid']],
+    [2, ['access_token', 'expired_in', 'loginMode', 'musicid', 'musickey', 'openid', 'refresh_key', 'refresh_token']],
+    [0, ['access_token', 'expired_in', 'loginMode', 'musicid', 'musickey', 'openid', 'refresh_key', 'refresh_token', 'str_musicid', 'unionid']],
+    [6, ['access_token', 'expired_in', 'loginMode', 'musicid', 'musickey', 'openid', 'refresh_key', 'refresh_token', 'str_musicid', 'unionid']],
+  ])('uses the upstream refresh fields for loginType %s', async (loginType, expectedKeys) => {
+    http.mockResolvedValueOnce(Response.json({ code: 0, req_0: { code: 0, data: { musicid: 123, musickey: 'new' } } }))
+    await refresh({
+      uin: '123', qm_keyst: 'old', loginType: String(loginType), openid: 'openid', unionid: 'unionid',
+      access_token: 'access', refresh_token: 'refresh-token', refresh_key: 'refresh-key', expired_at: '12345',
+    })
+    const body = JSON.parse(http.mock.calls[0][1].body)
+    const param = body.req_0.param
+    expect(Object.keys(param).sort()).toEqual(expectedKeys)
+    expect(param.loginMode).toBe(2)
+    expect(body.comm).toMatchObject({
+      ct: '24', cv: '4747474', platform: 'yqq.json', uin: '123',
+      format: 'json', inCharset: 'utf-8', outCharset: 'utf-8',
+      notice: '0', needNewCode: '1', tmeLoginType: String(loginType),
+    })
+    expect(body.comm.g_tk).toBe(body.comm.g_tk_new_20200303)
+  })
   test('a manually pasted cookie without refresh fields is validated, not discarded', async () => {
     http.mockResolvedValueOnce(Response.json({ code: 0, data: { creator: { nick: '用户' } } }))
     expect(await refresh({ uin: '123', qm_keyst: 'manual' })).toMatchObject({ refreshed: false })

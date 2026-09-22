@@ -13,14 +13,24 @@ module.exports = async (query) => {
   }
   const loginType = Number(query.loginType ?? 2)
   if (![0, 1, 2, 6].includes(loginType)) throw new Error('不支持的 QQ 登录凭证类型')
-  const result = await loginCgi('music.login.LoginServer', 'Login', {
-    openid: query.openid || '', access_token: query.access_token || '',
-    refresh_token: query.refresh_token || '', refresh_key: query.refresh_key || '',
-    unionid: query.unionid || '', expired_in: Number(query.expired_at) || 0,
-    musicid: Number(musicid), str_musicid: musicid, musickey, loginMode: 2,
-  }, {
-    ct: 24, cv: 4747474, platform: 'yqq.json', uin: musicid,
-    authst: musickey, g_tk: hash33(musickey, 5381), tmeLoginType: loginType,
+  const shared = {
+    openid: query.openid || '', refresh_token: query.refresh_token || '',
+    refresh_key: query.refresh_key || '', musickey, loginMode: 2,
+  }
+  const param = loginType === 1
+    ? { ...shared, str_musicid: musicid, unionid: query.unionid || '' }
+    : loginType === 2
+      ? { ...shared, access_token: query.access_token || '', expired_in: Number(query.expired_at) || 0, musicid: Number(musicid) }
+      : {
+          ...shared, access_token: query.access_token || '', expired_in: Number(query.expired_at) || 0,
+          musicid: Number(musicid), str_musicid: musicid, unionid: query.unionid || '',
+        }
+  const gTk = hash33(musickey, 5381)
+  const result = await loginCgi('music.login.LoginServer', 'Login', param, {
+    ct: 24, cv: 4747474, platform: 'yqq.json', chid: '0',
+    uin: Number(musicid), g_tk: gTk, g_tk_new_20200303: gTk,
+    format: 'json', inCharset: 'utf-8', outCharset: 'utf-8', notice: 0, needNewCode: 1,
+    tmeLoginType: loginType,
   })
   if (result.code !== 0) {
     // Some valid sessions cannot refresh yet. Check the old credential before retaining it.

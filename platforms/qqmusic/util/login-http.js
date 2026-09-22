@@ -1,19 +1,23 @@
 'use strict';
 
 // Native fetch keeps Set-Cookie separate in both Node and Workers.
-const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36';
 
-function responseCookies(headers) {
+function responseSetCookies(headers) {
   const values = typeof headers.getSetCookie === 'function'
     ? headers.getSetCookie()
     : [headers.get('set-cookie') || ''];
+  return values.flatMap((header) => header
+    ? header.split(/,(?=\s*[!#$%&'*+\-.^_`|~0-9A-Za-z]+=)/)
+    : []);
+}
+
+function responseCookies(headers) {
   const cookies = Object.create(null);
-  for (const header of values) {
-    for (const part of header.split(/,(?=\s*[!#$%&'*+\-.^_`|~0-9A-Za-z]+=)/)) {
-      const pair = part.split(';', 1)[0];
-      const index = pair.indexOf('=');
-      if (index > 0) cookies[pair.slice(0, index).trim()] = pair.slice(index + 1).trim();
-    }
+  for (const part of responseSetCookies(headers)) {
+    const pair = part.split(';', 1)[0];
+    const index = pair.indexOf('=');
+    if (index > 0) cookies[pair.slice(0, index).trim()] = pair.slice(index + 1).trim();
   }
   return cookies;
 }
@@ -26,7 +30,7 @@ async function loginFetch(url, options = {}, stage = '登录请求') {
   try {
     const response = await fetch(url, {
       ...options,
-      headers: { 'User-Agent': UA, Referer: 'https://y.qq.com/', ...options.headers },
+      headers: { 'User-Agent': UA, 'Accept-Language': 'zh-CN,zh;q=0.9', Referer: 'https://y.qq.com/', ...options.headers },
       redirect: 'manual',
       signal: AbortSignal.timeout(20000),
     });
@@ -77,4 +81,4 @@ function credentialCookies(data) {
   return cookies;
 }
 
-module.exports = { loginFetch, loginCgi, responseCookies, cookieHeader, credentialCookies, loginError };
+module.exports = { loginFetch, loginCgi, responseSetCookies, responseCookies, cookieHeader, credentialCookies, loginError };
