@@ -1,6 +1,6 @@
 [package]
 name = "wow-desktop"
-version = "1.0.1"
+version = "1.0.2"
 description = "Aduoer Wow local origin"
 authors = ["Anomi-oo"]
 edition = "2021"
