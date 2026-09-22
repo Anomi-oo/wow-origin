@@ -38,18 +38,6 @@ const PTQRSHOW_URL = (t) =>
 
 const PTQRLOGIN_URL = 'https://xui.ptlogin2.qq.com/ssl/ptqrlogin';
 
-const GRAPH_SHOW_URL = (state) =>
-  'https://graph.qq.com/oauth2.0/show?' +
-  new URLSearchParams({
-    which: 'Login',
-    display: 'pc',
-    response_type: 'code',
-    client_id: String(PT_3RD_AID),
-    redirect_uri: YQQ_REDIRECT_URI,
-    state,
-    scope: 'get_user_info,get_app_friends',
-  }).toString();
-
 const GRAPH_AUTHORIZE_URL = 'https://graph.qq.com/oauth2.0/authorize';
 const YQQ_HOME = 'https://y.qq.com/';
 const U_YQQ_MUSICU = 'https://u.y.qq.com/cgi-bin/musicu.fcg';
@@ -84,7 +72,9 @@ async function fetchWithSession(session, url, opts = {}) {
     ...(opts.headers || {}),
   };
   const cookieStr = await session.jar.getCookieString(url);
-  if (cookieStr) headers.Cookie = cookieStr;
+  const mergedCookie = mergeCookieHeaders(cookieStr, headers.Cookie || headers.cookie);
+  delete headers.cookie;
+  if (mergedCookie) headers.Cookie = mergedCookie;
 
   let res = await http(url, { ...opts, headers, followRedirect: false });
   await saveCookiesFromResponse(session.jar, url, res);
@@ -196,6 +186,27 @@ async function getCookieMapFor(session, url) {
   const list = await session.jar.getCookies(url);
   const map = {}; for (const c of list) map[c.key] = c.value;
   return map;
+}
+
+function stringifyCookies(cookies) {
+  return Object.entries(cookies)
+    .filter(([, value]) => value !== undefined && value !== null && String(value))
+    .map(([key, value]) => `${key}=${value}`)
+    .join('; ');
+}
+
+function mergeCookieHeaders(...headers) {
+  const cookies = new Map();
+  for (const header of headers) {
+    for (const item of String(header || '').split(';')) {
+      const separator = item.indexOf('=');
+      if (separator <= 0) continue;
+      const key = item.slice(0, separator).trim();
+      const value = item.slice(separator + 1).trim();
+      if (key) cookies.set(key, value);
+    }
+  }
+  return stringifyCookies(Object.fromEntries(cookies));
 }
 
 async function ensureUiCookie(session) {
@@ -385,31 +396,37 @@ async function pollLogin(token) {
   session.lock = true;
 
   try {
-    // 完成 graph 落 cookie
+    // check_sig 位于 graph.qq.com 的子域，Cookie Jar 不会自动携带
+    // ptlogin2.qq.com 的登录 Cookie，需要按 QQ 登录流程显式转交。
+    const ptloginCookies = {
+      ...await getCookieMapFor(session, 'https://ptlogin2.qq.com/'),
+      ...await getCookieMapFor(session, 'https://xui.ptlogin2.qq.com/'),
+    };
     await fetchWithSession(session, session.checkSigUrl, {
       headers: {
         Referer: 'https://xui.ptlogin2.qq.com/',
+        Cookie: stringifyCookies(ptloginCookies),
         'Upgrade-Insecure-Requests': '1',
         Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/*,*/*;q=0.8',
       },
-      maxRedirects: 8,
+      maxRedirects: 0,
     });
 
     // 授权获取 code
-    const graphCookies = await getCookieMapFor(session, 'https://graph.qq.com/');
-    const p_skey = graphCookies['p_skey'] || '';
-    const g_tk = p_skey ? calcGTK(p_skey) : 5381;
+    const graphCookies = {
+      ...await getCookieMapFor(session, session.checkSigUrl),
+      ...await getCookieMapFor(session, 'https://graph.qq.com/'),
+    };
+    const p_skey = graphCookies['p_skey'] || graphCookies['p_sKey'] || graphCookies['skey'] || graphCookies['pskey'] || '';
+    if (!p_skey) {
+      session.status = 'error';
+      session.msg = '未获取到 p_skey';
+      safeDelete(token);
+      return { status: 'error', msg: session.msg };
+    }
+    const g_tk = calcGTK(p_skey);
     const uiVal = await ensureUiCookie(session);
     const state = Math.random().toString(36).slice(2);
-    const showUrl = GRAPH_SHOW_URL(state);
-
-    await fetchWithSession(session, showUrl, {
-      headers: {
-        Referer: 'https://graph.qq.com/',
-        'Upgrade-Insecure-Requests': '1',
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/*,*/*;q=0.8',
-      },
-    });
 
     const form = new URLSearchParams({
       response_type: 'code',
@@ -433,6 +450,7 @@ async function pollLogin(token) {
       headers: {
         Origin: 'https://graph.qq.com',
         Referer: 'https://xui.ptlogin2.qq.com/',
+        Cookie: stringifyCookies(graphCookies),
         'Content-Type': 'application/x-www-form-urlencoded',
         'Upgrade-Insecure-Requests': '1',
         Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/*,*/*;q=0.8',
