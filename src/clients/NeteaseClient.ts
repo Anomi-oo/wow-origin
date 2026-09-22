@@ -5,6 +5,7 @@ import { NotFoundError } from '../errors';
 import { getNeteasePlaylistCategoryMap } from '../playlistCategories';
 
 const DEFAULT_NETEASE_QUALITY = 'exhigh';
+const NETEASE_NO_LYRICS_PLACEHOLDER = '[00:00.00]暂无歌词';
 
 export class NeteaseClient extends MusicClientBase {
   private readonly musicU: string;
@@ -163,7 +164,11 @@ export class NeteaseClient extends MusicClientBase {
     const lineLyricsPromise = this.call('lyric', { id }).catch(() => ({}));
     const wordLyricsPromise = this.call('lyric_new', { id }).catch(() => ({}));
     const [lineLyrics, wordLyrics] = await Promise.all([lineLyricsPromise, wordLyricsPromise]);
-    return mapTrackLyrics(lineLyrics, wordLyrics);
+    const lyrics = mapTrackLyrics(lineLyrics, wordLyrics);
+    if (lyrics.lyrics.trim() === NETEASE_NO_LYRICS_PLACEHOLDER) {
+      throw new NotFoundError('Lyrics not found');
+    }
+    return lyrics;
   }
 
   async getTrackLineLyric(id: string): Promise<string> {

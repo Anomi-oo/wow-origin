@@ -90,6 +90,29 @@ describe('NeteaseClient', () => {
     })
   })
 
+  test('getTrackLyrics 将网易云暂无歌词占位内容转为 404', async () => {
+    const callModule = jest.fn((route) => {
+      if (route === 'lyric') {
+        return Promise.resolve({
+          code: 200,
+          lrc: { lyric: '[00:00.00]暂无歌词' }
+        })
+      }
+      if (route === 'lyric/new') {
+        return Promise.resolve({ code: 200 })
+      }
+      return Promise.resolve({ code: 200 })
+    })
+    global.__musicPlatformFactory__.getPlatform.mockReturnValue({ callModule })
+
+    const client = new NeteaseClient('MUSIC_U=music-u')
+
+    await expect(client.getTrackLyrics('cloud-track-id')).rejects.toMatchObject({
+      name: 'NotFoundError',
+      status: 404
+    })
+  })
+
   test('getSimilarTracks 调用网易云相似歌曲模块并映射歌曲', async () => {
     const callModule = jest.fn().mockResolvedValue({
       code: 200,
@@ -153,6 +176,35 @@ describe('NeteaseClient', () => {
 
     expect(result).toEqual({ items: [], offset: 20, limit: 10, hasMore: false })
     expect(callModule).not.toHaveBeenCalled()
+  })
+
+  test('getUserPlaylist 将云盘虚拟歌单映射为非本人歌单', async () => {
+    const callModule = jest.fn().mockResolvedValue({
+      code: 200,
+      playlist: [
+        { id: 1, name: '我喜欢的音乐', trackCount: 2, creator: { userId: 88 } },
+        {
+          id: 'cloud-storage',
+          name: '云盘音乐',
+          description: '',
+          coverImgUrl: '',
+          trackCount: 0,
+          creator: { userId: '', nickname: '', avatarUrl: '' }
+        }
+      ]
+    })
+    global.__musicPlatformFactory__.getPlatform.mockReturnValue({ callModule })
+
+    const client = new NeteaseClient('MUSIC_U=music-u')
+    const playlists = await client.getUserPlaylist()
+
+    expect(playlists[1]).toMatchObject({
+      id: 'cloud-storage',
+      name: '云盘音乐',
+      coverUrl: '',
+      trackCount: 0,
+      creator: { id: '', name: '', avatarUrl: '' }
+    })
   })
 
   test('userFavoriteTracks 通过用户喜欢的音乐歌单详情获取收藏歌曲，不再请求歌曲详情', async () => {

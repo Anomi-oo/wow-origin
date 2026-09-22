@@ -1,6 +1,8 @@
 // 网易云音乐歌单详情
 const Logger = require('../../../core/Logger')
+const CloudStorage = require('../cloud_storage')
 const logger = new Logger({ component: 'netease-playlist-detail' })
+const cloudStorage = new CloudStorage()
 
 /**
  * 网易云音乐歌单详情模块
@@ -8,6 +10,16 @@ const logger = new Logger({ component: 'netease-playlist-detail' })
  */
 module.exports = (query, request) => {
   const playlistId = query.id
+
+  if (cloudStorage.isCloudPlaylist(playlistId)) {
+    return cloudStorage.getPlaylistDetail(query, request).catch(error => {
+      logger.error('NetEase cloud storage detail failed', {
+        error: error.message,
+        playlistId
+      })
+      throw error
+    })
+  }
 
   const limit = parseInt(query.n) || 10000
   const subscribers = 0
@@ -37,5 +49,4 @@ module.exports = (query, request) => {
     throw error
   })
 }
-
 
