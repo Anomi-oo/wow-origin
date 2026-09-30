@@ -7,7 +7,8 @@ const VISIONOS_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) Appl
 const visitors = new Map<string, { value: string; expires: number }>();
 const musicVisitors = new Map<string, { value: string; expires: number }>();
 // The same InnerTube endpoint and browser authentication used by sigma67/ytmusicapi.
-const API_KEY = 'AIzaSyC9XL3ZjWddXya6X74dJoCTL-WEYFDNX30';
+// Overridable via env so deployments are not forced to rely on a key baked into source control.
+const API_KEY = process.env.YTMUSIC_API_KEY || 'AIzaSyC9XL3ZjWddXya6X74dJoCTL-WEYFDNX30';
 
 export function cookieValue(cookie: string, name: string): string {
   return cookie.split(';').map((part) => part.trim()).find((part) => part.startsWith(`${name}=`))?.slice(name.length + 1) || '';
