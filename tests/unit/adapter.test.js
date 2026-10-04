@@ -98,6 +98,22 @@ describe('Wow adapter', () => {
     expect(lxResolver.resolveTrackUrl).not.toHaveBeenCalled()
   })
 
+  test('QQ 新音质优先调用官方模块，避免洛雪 SQ 冒充高音质', async () => {
+    const officialTrackUrl = {
+      url: 'https://official.test/master.flac', quality: 'master', format: 'flac', bitrate: null, size: 100
+    }
+    const officialSpy = jest.spyOn(QQClient.prototype, 'getTrackUrl').mockResolvedValue(officialTrackUrl)
+    const lxResolver = { resolveTrackUrl: jest.fn() }
+    const adapter = createAdapter({
+      platform: 'qq', name: 'QQ', cookie: 'uin=1; qm_keyst=value', apiAccessKey: 'token-1',
+      useLuoxue: true, favoriteTrackIds: new Set()
+    }, lxResolver)
+
+    await expect(adapter.getTrackUrl('track-1', 'master')).resolves.toEqual(officialTrackUrl)
+    expect(officialSpy).toHaveBeenCalledWith('track-1', 'master')
+    expect(lxResolver.resolveTrackUrl).not.toHaveBeenCalled()
+  })
+
   test('存在 cookie 且洛雪源无结果时回退到官方地址', async () => {
     const officialTrackUrl = {
       url: 'https://official.test/song.mp3',

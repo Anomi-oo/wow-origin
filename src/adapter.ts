@@ -16,12 +16,13 @@ export function createMusicClient(
   favoriteTrackIds?: Set<string>,
   favoriteArtistIds?: Set<string>,
   favoriteAlbumIds?: Set<string>,
-  userPlaylistIds?: Set<string>
+  userPlaylistIds?: Set<string>,
+  deviceState?: string
 ): QQClient | NeteaseClient | YTMusicClient {
   return platform === 'ytmusic'
     ? new YTMusicClient(cookie, favoriteTrackIds, favoriteArtistIds, favoriteAlbumIds, userPlaylistIds)
     : platform === 'qq'
-    ? new QQClient(cookie, favoriteTrackIds, favoriteArtistIds, favoriteAlbumIds, userPlaylistIds)
+    ? new QQClient(cookie, favoriteTrackIds, favoriteArtistIds, favoriteAlbumIds, userPlaylistIds, deviceState)
     : new NeteaseClient(cookie, favoriteTrackIds, favoriteArtistIds, favoriteAlbumIds, userPlaylistIds);
 }
 
@@ -40,7 +41,7 @@ export function createAdapter(
   lxTrackUrlResolver?: LxTrackUrlResolver,
   streamOrigin?: string
 ): QQClient | NeteaseClient | YTMusicClient {
-  const client = createMusicClient(account.platform, account.cookie, account.favoriteTrackIds, account.favoriteArtistIds, account.favoriteAlbumIds, account.userPlaylistIds);
+  const client = createMusicClient(account.platform, account.cookie, account.favoriteTrackIds, account.favoriteArtistIds, account.favoriteAlbumIds, account.userPlaylistIds, account.deviceState);
   if (client instanceof YTMusicClient && streamOrigin) {
     client.setStreamUrl((id, quality) => createStreamUrl(streamOrigin, account, id, quality));
   }
@@ -61,6 +62,7 @@ export function createAdapter(
   const defaultGetTrackUrl = client.getTrackUrl.bind(client);
   const getLxTrackUrl = async (id: string, quality?: string): Promise<TrackUrl | undefined> => {
     if (account.platform === 'netease' && quality === 'jyeffect') return undefined;
+    if (account.platform === 'qq' && ['atmos2', 'atmos51', 'dolby', 'master'].includes(quality || '')) return undefined;
     try {
       const lxTrackUrl = account.lxSource?.length
         ? await lxTrackUrlResolver.resolveTrackUrl(account.platform, id, quality, account.lxSource)

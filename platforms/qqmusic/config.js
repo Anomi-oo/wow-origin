@@ -9,9 +9,10 @@ const QUALITY_CONFIG = {
   "higher": { prefix: "C600", suffix: ".m4a", name: "高品质", bitrate: 192000, format: "m4a", sizeField: "size_192aac"},
   "exhigh": { prefix: "M800", suffix: ".mp3", name: "HQ 高品质", bitrate: 320000, format: "mp3", sizeField: "size_320mp3"},
   "lossless": { prefix: "F000", suffix: ".flac", name: "SQ 无损品质", bitrate: null, format: "flac", sizeField: "size_flac"},
-  // "dolby": { prefix: "Q000", suffix: ".flac", name: "Dolby Atmos", bitrate: null, format: "flac", sizeField: "size_dolby"},
-  // "jymaster": { prefix: "AI00", suffix: ".flac", name: "Hi-Res (24-bit)", bitrate: null, format: "flac", sizeField: "size_flac"},
-  // "jyeffect": { prefix: "AI00", suffix: ".flac", name: "Hi-Res (24-bit)", bitrate: null, format: "flac", sizeField: "size_flac"},
+  "atmos2": { prefix: "Q000", suffix: ".flac", name: "臻品音质", bitrate: null, format: "flac", sizeField: "size_new", sizeIndex: 1 },
+  "atmos51": { prefix: "Q001", suffix: ".flac", name: "臻品全景声 5.1", bitrate: null, format: "flac", sizeField: "size_new", sizeIndex: 2 },
+  "dolby": { prefix: "D004", suffix: ".mp4", name: "杜比全景声", bitrate: null, format: "mp4", sizeField: "size_dolby" },
+  "master": { prefix: "AI00", suffix: ".flac", name: "臻品母带", bitrate: null, format: "flac", sizeField: "size_new", sizeIndex: 0 },
 }
 
 // 歌单分类映射 (name -> categoryId)

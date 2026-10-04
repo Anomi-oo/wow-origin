@@ -26,7 +26,11 @@ const PLATFORM_QUALITY_CONFIGS: Record<MusicPlatform, PlatformQualityConfig> = {
       { key: 'standard', label: '标准', rank: 10, bitrate: 128000, format: 'mp3' },
       { key: 'higher', label: '高品质', rank: 20, bitrate: 192000, format: 'm4a' },
       { key: 'exhigh', label: 'HQ 高品质', rank: 30, bitrate: 320000, format: 'mp3' },
-      { key: 'lossless', label: 'SQ 无损品质', rank: 40, bitrate: null, format: 'flac' }
+      { key: 'lossless', label: 'SQ 无损品质', rank: 40, bitrate: null, format: 'flac' },
+      { key: 'atmos2', label: '臻品音质', rank: 50, bitrate: null, format: 'flac' },
+      { key: 'atmos51', label: '臻品全景声 5.1', rank: 60, bitrate: null, format: 'flac' },
+      { key: 'dolby', label: '杜比全景声', rank: 70, bitrate: null, format: 'mp4' },
+      { key: 'master', label: '臻品母带', rank: 90, bitrate: null, format: 'flac' }
     ]
   },
   netease: {

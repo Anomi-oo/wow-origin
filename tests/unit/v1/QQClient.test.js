@@ -94,6 +94,43 @@ describe('QQClient', () => {
     expect(callModule).not.toHaveBeenCalledWith('lyric/new', expect.anything())
   })
 
+  test('QQ 新音质请求失败时按 SQ、HQ、标准降级并返回实际音质', async () => {
+    const callModule = jest.fn((_route, options) => {
+      const level = options.query.level
+      if (level === 'atmos51') return Promise.reject(new Error('unavailable'))
+      return Promise.resolve({ code: 200, data: [{ url: level === 'lossless' ? '' : `https://audio.test/${level}`, type: 'mp3' }] })
+    })
+    global.__musicPlatformFactory__.getPlatform.mockReturnValue({ callModule })
+
+    const result = await new QQClient('uin=o123; qm_keyst=key').getTrackUrl('songMid', 'atmos51')
+
+    expect(callModule.mock.calls.map(([, options]) => options.query.level)).toEqual(['atmos51', 'lossless', 'exhigh'])
+    expect(result).toMatchObject({ url: 'https://audio.test/exhigh', quality: 'exhigh' })
+  })
+
+  test('QQ 新音质请求沿用账号保存的 Android 设备身份', async () => {
+    const callModule = jest.fn().mockResolvedValue({ code: 200, data: [{ url: 'https://audio.test/master.flac', type: 'flac' }] })
+    global.__musicPlatformFactory__.getPlatform.mockReturnValue({ callModule })
+
+    const client = new QQClient('uin=o123; qm_keyst=key; loginType=2', undefined, undefined, undefined, undefined, 'saved-state')
+    await expect(client.getTrackUrl('songMid', 'master')).resolves.toMatchObject({ quality: 'master' })
+    expect(callModule).toHaveBeenCalledWith('song/url', expect.objectContaining({
+      query: expect.objectContaining({ level: 'master', qq_android_identity: 'saved-state', loginType: '2' })
+    }))
+  })
+
+  test('QQ 首次选择最高音质时保留上游返回的 SQ 音质 key', async () => {
+    const callModule = jest.fn().mockResolvedValue({
+      code: 200, data: [{ url: 'https://audio.test/sq.flac', level: 'lossless', type: 'flac' }]
+    })
+    global.__musicPlatformFactory__.getPlatform.mockReturnValue({ callModule })
+
+    const result = await new QQClient('uin=o123; qm_keyst=key').getTrackUrl('songMid', 'max')
+
+    expect(callModule.mock.calls.map(([, options]) => options.query.level)).toEqual(['master'])
+    expect(result).toMatchObject({ quality: 'lossless', format: 'flac' })
+  })
+
   test('getTrackLyrics 并发聚合逐行与逐字歌词', async () => {
     let releaseLineLyrics
     let releaseWordLyrics
@@ -335,9 +372,10 @@ describe('QQClient', () => {
   })
 
   test('自动音质候选顺序稳定，显式音质不触发降级', () => {
-    expect(getQualityCandidates('max')).toEqual(['lossless', 'exhigh', 'higher', 'standard'])
+    expect(getQualityCandidates('max')).toEqual(['master', 'lossless', 'exhigh', 'standard'])
     expect(getQualityCandidates('min')).toEqual(['standard', 'higher', 'exhigh', 'lossless'])
     expect(getQualityCandidates('lossless')).toEqual(['lossless'])
+    expect(getQualityCandidates('dolby')).toEqual(['dolby', 'lossless', 'exhigh', 'standard'])
   })
 
   test('歌单分类按 QQ 配置反转后的 key 顺序返回', async () => {

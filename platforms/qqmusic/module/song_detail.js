@@ -72,14 +72,14 @@ function formatSongs(tracks) {
         fee: track.pay ? track.pay.pay_play : 0,
         alia: [track.subtitle],
         qualities: Object.entries(qualityMap).map(([key, el]) => {
-          const sizeField = el.sizeField;
-          if (file[sizeField] && file[sizeField] > 0) {
+          const size = el.sizeIndex === undefined ? file[el.sizeField] : file[el.sizeField]?.[el.sizeIndex];
+          if (Number(size) > 0) {
             return {
               key: key,
               label: el.name,
               bitrate: el.bitrate,
               format: el.format,
-              size: file[sizeField]
+              size: Number(size)
             }
           }
           return null;

@@ -2,8 +2,19 @@ const { zzcSign } = require('../util/crypto')
 const { default: axios } = require('axios')
 const { getQualityMap,getQQConf } = require('../config')
 const getSongDetail = require('./song_detail')
+const { getAndroidLoginContext } = require('../util/android-login')
+const { randomUUID } = require('node:crypto')
 
 const isMid = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]+$/;
+const ENHANCED_QUALITIES = new Set(['atmos2', 'atmos51', 'dolby', 'master'])
+
+function actualQualityFromPurl(purl, requestedQuality, qualityMap) {
+  const filename = String(purl).split('?', 1)[0].split('/').pop() || ''
+  return Object.keys(qualityMap).find(key => {
+    const config = qualityMap[key]
+    return filename.startsWith(config.prefix) && filename.endsWith(config.suffix)
+  }) || requestedQuality
+}
 
 /**
  * QQ音乐歌曲URL获取，支持id或mid参数
@@ -30,6 +41,26 @@ module.exports = async (query, request) => {
 
   // 构建文件名: prefix + songmid + songmid + suffix
   const filename = `${qualityConfig.prefix}${songMid}${songMid}${qualityConfig.suffix}`
+
+  if (ENHANCED_QUALITIES.has(quality)) {
+    const android = getAndroidLoginContext(uin, query.qq_android_identity, { requireExisting: true })
+    const result = await android.androidLoginCgi('music.vkey.GetVkey', 'UrlGetVkey', {
+      uin, filename: [filename], guid: randomUUID().replace(/-/g, ''),
+      songmid: [songMid], songtype: [0], ctx: 0
+    }, { musicid: uin, musickey: qm_keyst, loginType: Number(query.loginType || 2) })
+    if (result.code !== 0) throw new Error(`QQ 音频链接请求失败 (${result.code})`)
+    const purl = result.data?.midurlinfo?.[0]?.purl
+    const actualQuality = purl ? actualQualityFromPurl(purl, quality, qualityMap) : quality
+    const actualConfig = qualityMap[actualQuality]
+    return {
+      data: [{
+        id: query.id, mid: songMid,
+        url: purl ? getQQConf().streamDomain + purl : '',
+        br: actualConfig.bitrate, size: 0,
+        type: actualConfig.format, encodeType: actualConfig.format, level: actualQuality
+      }]
+    }
+  }
 
   // 构建请求数据 - 使用传入的uin
   const requestData = {
@@ -81,6 +112,8 @@ module.exports = async (query, request) => {
     })
 
     const purl = response.data.req_1.data.midurlinfo?.[0].purl
+    const actualQuality = purl ? actualQualityFromPurl(purl, quality, qualityMap) : quality
+    const actualConfig = qualityMap[actualQuality]
 
     const streamDomain = getQQConf().streamDomain
 
@@ -92,12 +125,12 @@ module.exports = async (query, request) => {
         id: query.id,   
         mid: songMid,
         url: finalUrl,
-        br: qualityConfig.bitrate,
+        br: actualConfig.bitrate,
         size: 0, // 未提供文件大小
         md5: '',
-        type: qualityConfig.format,
-        encodeType: qualityConfig.format,
-        level: quality,
+        type: actualConfig.format,
+        encodeType: actualConfig.format,
+        level: actualQuality,
         time: 0,
         fee: 0
       }]

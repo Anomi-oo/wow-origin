@@ -8,8 +8,9 @@ const DEFAULT_QQ_QUALITY = 'exhigh';
 
 export function getQualityCandidates(quality?: string): string[] {
   if (!quality) return [DEFAULT_QQ_QUALITY, 'higher', 'standard'];
-  if (quality === 'max') return ['lossless', 'exhigh', 'higher', 'standard'];
+  if (quality === 'max') return ['master', 'lossless', 'exhigh', 'standard'];
   if (quality === 'min') return ['standard', 'higher', 'exhigh', 'lossless'];
+  if (['atmos2', 'atmos51', 'dolby', 'master'].includes(quality)) return [quality, 'lossless', 'exhigh', 'standard'];
   return [quality];
 }
 
@@ -32,13 +33,15 @@ export class QQClient extends MusicClientBase {
   private readonly uin: string;
   private readonly qm_keyst: string;
   private readonly qqLoginType: string;
+  private readonly deviceState?: string;
 
-  constructor(cookie: string, favoriteTrackSet?: Set<string>, favoriteArtistSet?: Set<string>, favoriteAlbumSet?: Set<string>, userPlaylistSet?: Set<string>) {
+  constructor(cookie: string, favoriteTrackSet?: Set<string>, favoriteArtistSet?: Set<string>, favoriteAlbumSet?: Set<string>, userPlaylistSet?: Set<string>, deviceState?: string) {
     super(cookie, 'qq', favoriteTrackSet, favoriteArtistSet, favoriteAlbumSet, userPlaylistSet);
     const credentials = normalizeQQCredentials(cookie);
     this.uin = credentials.uin;
     this.qm_keyst = credentials.qm_keyst;
     this.qqLoginType = this.getCookieValue('loginType') || '2';
+    this.deviceState = deviceState;
   }
 
   private async call(route: string, query: Record<string, any> = {}, keepEnvelope = false): Promise<any> {
@@ -162,13 +165,22 @@ export class QQClient extends MusicClientBase {
 
   async getTrackUrl(id: string, quality?: string): Promise<TrackUrl> {
     let resolvedAudio: any | undefined;
+    const candidates = getQualityCandidates(quality);
 
-    for (const candidate of getQualityCandidates(quality)) {
-      const result = await this.call('song_url', { mid: id, level: candidate });
-      const audio = Array.isArray(result) ? result[0] : result.data?.[0] || result.data || result.songs?.[0];
-      if (audio?.url) {
-        resolvedAudio = { ...audio, level: candidate };
-        break;
+    for (const candidate of candidates) {
+      try {
+        const result = await this.call('song_url', {
+          mid: id, level: candidate,
+          ...(this.deviceState ? { qq_android_identity: this.deviceState } : {}),
+          loginType: this.qqLoginType
+        });
+        const audio = Array.isArray(result) ? result[0] : result.data?.[0] || result.data || result.songs?.[0];
+        if (audio?.url) {
+          resolvedAudio = { ...audio, level: audio.level || candidate };
+          break;
+        }
+      } catch (error) {
+        if (candidates.length === 1) throw error;
       }
     }
 
