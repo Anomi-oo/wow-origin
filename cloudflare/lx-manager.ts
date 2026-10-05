@@ -5,6 +5,7 @@ import type { TrackUrl } from 'aduoer-wow-sdk';
 import type { AppLxSourceManager } from '../src/app';
 import type { MusicPlatform } from '../src/types';
 import type { LxPlatform, LxQuality } from '../src/lx-resource/types';
+import { getExactLxQuality } from '../src/lx-resource/quality';
 import { bundledLxSource, installBundledLxSource } from './generated/lx-source';
 
 const EVENT_NAMES = { request: 'request', inited: 'inited', updateAlert: 'updateAlert' } as const;
@@ -48,7 +49,7 @@ function request(
   const headers = new Headers(options.headers || {});
   let body = options.body;
   if (body === undefined && options.form) {
-    body = new URLSearchParams(Object.entries(options.form).map(([key, value]) => [key, String(value)]));
+    body = new URLSearchParams(Object.entries(options.form).map(([key, value]): [string, string] => [key, String(value)]));
     if (!headers.has('content-type')) headers.set('content-type', 'application/x-www-form-urlencoded');
   } else if (body === undefined && options.formData) {
     const formData = new FormData();
@@ -153,10 +154,13 @@ export class CloudflareLxSourceManager implements AppLxSourceManager {
   async updateAll(): Promise<void> {}
   async stop(): Promise<void> {}
 
-  async resolveTrackUrl(platform: MusicPlatform, id: string, requestedQuality?: string): Promise<TrackUrl | undefined> {
+  async resolveTrackUrl(platform: MusicPlatform, id: string, requestedQuality?: string, _accountSources: readonly string[] = [], options: { allowFallback?: boolean } = {}): Promise<TrackUrl | undefined> {
     if (!this.requestHandler) return undefined;
     const source: LxPlatform = platform === 'qq' ? 'tx' : 'wy';
-    const quality = selectQuality(requestedQuality, this.capabilities[source]?.qualities || []);
+    const supported = this.capabilities[source]?.qualities || [];
+    const quality = options.allowFallback === false
+      ? getExactLxQuality(platform, requestedQuality, supported)
+      : selectQuality(requestedQuality, supported);
     if (!quality) return undefined;
     const invocation = Promise.resolve(this.requestHandler({
       source,

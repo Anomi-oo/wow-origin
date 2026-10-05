@@ -3,12 +3,6 @@ import type { MusicPlatform } from './types';
 
 export type { QualityOption } from 'aduoer-wow-sdk';
 
-const NETEASE_ENHANCED_QUALITIES = new Set(['hires', 'jyeffect', 'master', 'sky']);
-
-export function isNeteaseEnhancedQuality(quality: string | undefined): boolean {
-  return quality !== undefined && NETEASE_ENHANCED_QUALITIES.has(quality);
-}
-
 export type PlatformQuality = QualityOption & {
   rank: number;
   bitrate?: number | null;
@@ -64,11 +58,20 @@ export function isQualitySupported(platform: MusicPlatform, quality: string): bo
   return getQualityOptions(platform).some((option) => option.key === quality);
 }
 
-export function getQualityCandidates(platform: MusicPlatform, quality: string): string[] {
+export function getRequestedQuality(platform: MusicPlatform, quality?: string): string {
+  const qualities = getPlatformQualities(platform);
+  if (quality === 'max') return qualities[qualities.length - 1].key;
+  if (quality === 'min') return qualities[0].key;
+  return quality || 'exhigh';
+}
+
+/** 只选择歌曲实际存在且低于失败档位的音质，按距离从近到远排序。 */
+export function getQualityCandidates(platform: MusicPlatform, quality: string, available: readonly Pick<Quality, 'key'>[]): string[] {
   const qualities = getPlatformQualities(platform);
   const index = qualities.findIndex((item) => item.key === quality);
-  if (index === -1) return [quality];
-  return qualities.slice(0, index + 1).reverse().map((item) => item.key);
+  if (index === -1) return [];
+  const supported = new Set(available.map((item) => item.key));
+  return qualities.slice(0, index).reverse().filter((item) => supported.has(item.key)).map((item) => item.key);
 }
 
 function getQualitySource(platform: MusicPlatform, definition: PlatformQuality, track: any): any {

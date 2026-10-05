@@ -15,6 +15,7 @@ import {
   sourceLabel
 } from './config';
 import { LxSourceRuntime } from './runtime';
+import { getExactLxQuality } from './quality';
 import type {
   LxLogLevel,
   LxSourceCapabilities,
@@ -131,7 +132,8 @@ export class LxSourceManager implements LxTrackUrlResolver, LxSourceLifecycle {
     platform: MusicPlatform,
     id: string,
     quality?: string,
-    accountSources: readonly string[] = []
+    accountSources: readonly string[] = [],
+    options: { allowFallback?: boolean } = {}
   ): Promise<TrackUrl | undefined> {
     if (this.stopped || this.sources.size === 0) return undefined;
     const lxPlatform = mapMusicPlatformToLx(platform);
@@ -146,7 +148,11 @@ export class LxSourceManager implements LxTrackUrlResolver, LxSourceLifecycle {
       const source = this.sources.get(config.hash);
       const capability = source?.capabilities[lxPlatform];
       if (!source || !capability) continue;
-      for (const lxQuality of getLxQualityCandidates(quality, capability.qualities, platform)) {
+      const exactQuality = getExactLxQuality(platform, quality, capability.qualities);
+      const candidates = options.allowFallback === false
+        ? (exactQuality ? [exactQuality] : [])
+        : getLxQualityCandidates(quality, capability.qualities, platform);
+      for (const lxQuality of candidates) {
         const candidateRemaining = deadline - Date.now();
         if (candidateRemaining <= 0) break;
         try {

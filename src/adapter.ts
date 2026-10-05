@@ -8,6 +8,7 @@ import { collectionStatusNeeded } from './collectionStatus';
 import type { MusicPlatform } from './types';
 import type { LxTrackUrlResolver } from './lx-resource';
 import { createStreamUrl } from './ytmusic/stream';
+import { hasValidAudioUrl } from './trackUrl';
 
 /** 根据私有平台账号创建符合公开 SDK 契约的 Adapter。 */
 export function createMusicClient(
@@ -24,16 +25,6 @@ export function createMusicClient(
     : platform === 'qq'
     ? new QQClient(cookie, favoriteTrackIds, favoriteArtistIds, favoriteAlbumIds, userPlaylistIds, deviceState)
     : new NeteaseClient(cookie, favoriteTrackIds, favoriteArtistIds, favoriteAlbumIds, userPlaylistIds);
-}
-
-function hasValidAudioUrl(trackUrl: TrackUrl | undefined): trackUrl is TrackUrl {
-  if (!trackUrl || typeof trackUrl.url !== 'string' || !trackUrl.url.trim()) return false;
-  try {
-    const url = new URL(trackUrl.url);
-    return url.protocol === 'http:' || url.protocol === 'https:';
-  } catch {
-    return false;
-  }
 }
 
 export function createAdapter(
@@ -57,16 +48,14 @@ export function createAdapter(
     account.favoriteAlbumsLoaded = true;
     return albums;
   };
-  if (account.platform === 'ytmusic' || account.useLuoxue === false || !lxTrackUrlResolver) return client;
+  if (client instanceof YTMusicClient || account.useLuoxue === false || !lxTrackUrlResolver) return client;
 
-  const defaultGetTrackUrl = client.getTrackUrl.bind(client);
+  const defaultGetTrackUrl = client.getTrackUrlForQuality.bind(client);
   const getLxTrackUrl = async (id: string, quality?: string): Promise<TrackUrl | undefined> => {
     if (account.platform === 'netease' && quality === 'jyeffect') return undefined;
     if (account.platform === 'qq' && ['atmos2', 'atmos51', 'dolby', 'master'].includes(quality || '')) return undefined;
     try {
-      const lxTrackUrl = account.lxSource?.length
-        ? await lxTrackUrlResolver.resolveTrackUrl(account.platform, id, quality, account.lxSource)
-        : await lxTrackUrlResolver.resolveTrackUrl(account.platform, id, quality);
+      const lxTrackUrl = await lxTrackUrlResolver.resolveTrackUrl(account.platform, id, quality, account.lxSource || [], { allowFallback: false });
       if (hasValidAudioUrl(lxTrackUrl)) return lxTrackUrl;
       if (lxTrackUrl) {
         console.warn('[lx-source] resolver returned an invalid audio URL, using official track URL flow');
@@ -77,7 +66,8 @@ export function createAdapter(
     return undefined;
   };
 
-  client.getTrackUrl = async (id: string, quality?: string) => {
+  // 每个档位先尝试洛雪和官方；降级统一由 client 按歌曲详情决定。
+  client.getTrackUrlForQuality = async (id: string, quality: string) => {
     const lxTrackUrl = await getLxTrackUrl(id, quality);
     if (lxTrackUrl) return lxTrackUrl;
     return defaultGetTrackUrl(id, quality);

@@ -67,7 +67,8 @@ export interface LxTrackUrlResolver {
     platform: MusicPlatform,
     id: string,
     quality?: string,
-    accountSources?: readonly string[]
+    accountSources?: readonly string[],
+    options?: { allowFallback?: boolean }
   ): Promise<TrackUrl | undefined>;
 }
 

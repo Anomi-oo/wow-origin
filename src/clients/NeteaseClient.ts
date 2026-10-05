@@ -1,11 +1,10 @@
 import type { Album, AlbumDetail, AlbumPage, Artist, ArtistDetail, ArtistPage, Playlist, PlaylistCategory, PlaylistDetail, PlaylistPage, SearchSuggest, ToplistGroup, Track, TrackLyrics, TrackPage, TrackUrl, UserProfile } from 'aduoer-wow-sdk';
 import { mapAlbum, mapAlbumDetail, mapArtist, mapArtistDetail, mapPlaylist, mapSearchSuggest, mapTrack, mapTrackLyrics, mapTrackUrl, mapUserDetail } from '../mappers/netease';
 import { MusicClientBase } from './MusicClientBase';
-import { NotFoundError } from '../errors';
+import { NotFoundError, UnplayableError } from '../errors';
 import { getNeteasePlaylistCategoryMap } from '../playlistCategories';
-import { isNeteaseEnhancedQuality } from '../quality';
+import { resolveTrackUrlWithFallback } from '../trackUrl';
 
-const DEFAULT_NETEASE_QUALITY = 'exhigh';
 const NETEASE_NO_LYRICS_PLACEHOLDER = '[00:00.00]暂无歌词';
 
 export class NeteaseClient extends MusicClientBase {
@@ -131,43 +130,18 @@ export class NeteaseClient extends MusicClientBase {
   }
 
   async getTrackUrl(id: string, quality?: string): Promise<TrackUrl> {
-    const enhancedQuality = isNeteaseEnhancedQuality(quality);
-    const qualityCandidates = !quality
-      ? [DEFAULT_NETEASE_QUALITY, 'standard']
-      : quality === 'max'
-      ? ['master', 'lossless', 'exhigh', 'standard']
-      : quality === 'min'
-        ? ['standard', 'exhigh', 'lossless', 'hires', 'master']
-        : enhancedQuality
-          ? [quality, 'lossless', 'exhigh', 'standard']
-          : [quality];
-    let lastError: unknown;
+    return resolveTrackUrlWithFallback('netease', quality, () => this.getTrackDetail(id), (candidate) => this.getTrackUrlForQuality(id, candidate));
+  }
 
-    for (const candidate of qualityCandidates) {
-      let raw: any;
-      try {
-        raw = await this.call('song_url_xeapi', { id, level: candidate });
-      } catch (error) {
-        if (qualityCandidates.length === 1) throw error;
-        lastError = error;
-        continue;
-      }
-      const candidates = [
-        raw?.data,
-        raw?.body?.data,
-        raw?.songs,
-        raw
-      ];
-      const audio = candidates
-        .flatMap((candidate) => Array.isArray(candidate) ? candidate : [candidate])
-        .find((item) => item?.url);
-      if (audio?.url) {
-        return mapTrackUrl({ ...audio, level: audio.level || candidate });
-      }
-    }
-
-    if (lastError) throw lastError;
-    throw new NotFoundError('Song has no playable audio URL');
+  async getTrackUrlForQuality(id: string, quality: string): Promise<TrackUrl> {
+    const raw = await this.call('song_url_xeapi', { id, level: quality });
+    const audio = [raw?.data, raw?.body?.data, raw?.songs, raw]
+      .flatMap((candidate) => Array.isArray(candidate) ? candidate : [candidate])
+      .find((item) => item?.url);
+    if (!audio?.url) throw new NotFoundError('Song has no playable audio URL');
+    // 网易会在无完整播放权限时返回有效试听 URL；必须在映射丢弃试听信息前识别。
+    if (audio.freeTrialInfo) throw new UnplayableError('Song only has a trial audio URL');
+    return mapTrackUrl({ ...audio, level: audio.level || quality });
   }
 
   async getTrackLyrics(id: string): Promise<TrackLyrics> {

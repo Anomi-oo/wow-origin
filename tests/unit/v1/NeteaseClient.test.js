@@ -99,16 +99,67 @@ describe('NeteaseClient', () => {
     expect(callModule.mock.calls.map(([, options]) => options.query.level)).toEqual(['master'])
   })
 
+  test('官方试听链接视为不可用，按歌曲音质表降级到完整链接', async () => {
+    const callModule = jest.fn(async (route, { query }) => {
+      if (route === 'song/detail') return { code: 200, songs: [{ id: 123, h: { size: 100 }, l: { size: 100 } }] }
+      if (route === 'song/music/detail') return { code: 200, data: {} }
+      return { code: 200, data: [{
+        url: `https://audio.test/${query.level}`,
+        level: query.level,
+        freeTrialInfo: query.level === 'standard' ? null : { start: 0, end: 30 }
+      }] }
+    })
+    global.__musicPlatformFactory__.getPlatform.mockReturnValue({ callModule })
+
+    await expect(new NeteaseClient('').getTrackUrl('123', 'exhigh')).resolves.toMatchObject({
+      url: 'https://audio.test/standard', quality: 'standard'
+    })
+    expect(callModule.mock.calls.filter(([route]) => route === 'song/url/xeapi').map(([, { query }]) => query.level))
+      .toEqual(['exhigh', 'standard'])
+    expect(callModule.mock.calls.filter(([route]) => route === 'song/detail')).toHaveLength(1)
+  })
+
+  test('所有档位都是试听时不返回试听链接，也不向上选择', async () => {
+    const callModule = jest.fn(async (route, { query }) => {
+      if (route === 'song/detail') return { code: 200, songs: [{ id: 123, jm: { size: 100 }, h: { size: 100 }, l: { size: 100 } }] }
+      if (route === 'song/music/detail') return { code: 200, data: {} }
+      return { code: 200, data: [{
+        url: `https://audio.test/${query.level}`, level: query.level, freeTrialInfo: { start: 0, end: 30 }
+      }] }
+    })
+    global.__musicPlatformFactory__.getPlatform.mockReturnValue({ callModule })
+
+    await expect(new NeteaseClient('').getTrackUrl('123', 'lossless')).rejects.toThrow('Song only has a trial audio URL')
+    expect(callModule.mock.calls.filter(([route]) => route === 'song/url/xeapi').map(([, { query }]) => query.level))
+      .toEqual(['lossless', 'exhigh', 'standard'])
+    expect(callModule.mock.calls.filter(([route]) => route === 'song/detail')).toHaveLength(1)
+  })
+
+  test.each([undefined, null])('完整链接的 freeTrialInfo 为 %s 时不因试听权限字段误判', async (freeTrialInfo) => {
+    const callModule = jest.fn().mockResolvedValue({ code: 200, data: [{
+      url: 'https://audio.test/full.flac', level: 'lossless', freeTrialInfo,
+      freeTrialPrivilege: { resConsumable: false, userConsumable: false }
+    }] })
+    global.__musicPlatformFactory__.getPlatform.mockReturnValue({ callModule })
+
+    await expect(new NeteaseClient('').getTrackUrl('123', 'lossless')).resolves.toMatchObject({ url: 'https://audio.test/full.flac' })
+    expect(callModule).toHaveBeenCalledTimes(1)
+  })
+
   test('高音质、SQ、HQ 均无链接时继续降至标准', async () => {
-    const callModule = jest.fn((_route, { query }) => Promise.resolve({
-      code: 200,
-      body: { data: [{ url: query.level === 'standard' ? 'https://audio.example/standard' : null, level: query.level }] }
-    }))
+    const callModule = jest.fn((route, { query }) => {
+      if (route === 'song/detail') return Promise.resolve({ code: 200, songs: [{ id: 33418857, sq: { size: 100 }, h: { size: 100 }, l: { size: 100 } }] })
+      if (route === 'song/music/detail') return Promise.resolve({ code: 200, data: {} })
+      return Promise.resolve({
+        code: 200,
+        body: { data: [{ url: query.level === 'standard' ? 'https://audio.example/standard' : null, level: query.level }] }
+      })
+    })
     global.__musicPlatformFactory__.getPlatform.mockReturnValue({ callModule })
 
     await expect(new NeteaseClient('MUSIC_U=music-u').getTrackUrl('33418857', 'sky'))
       .resolves.toMatchObject({ url: 'https://audio.example/standard', quality: 'standard' })
-    expect(callModule.mock.calls.map(([, options]) => options.query.level)).toEqual([
+    expect(callModule.mock.calls.filter(([route]) => route === 'song/url/xeapi').map(([, options]) => options.query.level)).toEqual([
       'sky', 'lossless', 'exhigh', 'standard'
     ])
   })

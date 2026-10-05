@@ -1,4 +1,4 @@
-const { QQClient, getQualityCandidates, normalizeQQCredentials } = require('../../../dist/clients/QQClient')
+const { QQClient, normalizeQQCredentials } = require('../../../dist/clients/QQClient')
 
 describe('QQClient', () => {
   beforeEach(() => {
@@ -94,8 +94,11 @@ describe('QQClient', () => {
     expect(callModule).not.toHaveBeenCalledWith('lyric/new', expect.anything())
   })
 
-  test('QQ 新音质请求失败时按 SQ、HQ、标准降级并返回实际音质', async () => {
-    const callModule = jest.fn((_route, options) => {
+  test('QQ 新音质请求失败时按歌曲音质表降级并返回实际音质', async () => {
+    const callModule = jest.fn((route, options) => {
+      if (route === 'song/detail') return Promise.resolve({ code: 200, songs: [{ mid: 'songMid', qualities: [
+        { key: 'lossless', label: 'SQ', size: 100 }, { key: 'exhigh', label: 'HQ', size: 100 }
+      ] }] })
       const level = options.query.level
       if (level === 'atmos51') return Promise.reject(new Error('unavailable'))
       return Promise.resolve({ code: 200, data: [{ url: level === 'lossless' ? '' : `https://audio.test/${level}`, type: 'mp3' }] })
@@ -104,7 +107,8 @@ describe('QQClient', () => {
 
     const result = await new QQClient('uin=o123; qm_keyst=key').getTrackUrl('songMid', 'atmos51')
 
-    expect(callModule.mock.calls.map(([, options]) => options.query.level)).toEqual(['atmos51', 'lossless', 'exhigh'])
+    expect(callModule.mock.calls.filter(([route]) => route === 'song/url').map(([, options]) => options.query.level)).toEqual(['atmos51', 'lossless', 'exhigh'])
+    expect(callModule.mock.calls.filter(([route]) => route === 'song/detail')).toHaveLength(1)
     expect(result).toMatchObject({ url: 'https://audio.test/exhigh', quality: 'exhigh' })
   })
 
@@ -369,13 +373,6 @@ describe('QQClient', () => {
     }))
     expect(callModule).not.toHaveBeenCalledWith('likelist', expect.any(Object))
     expect(callModule).not.toHaveBeenCalledWith('song/detail', expect.any(Object))
-  })
-
-  test('自动音质候选顺序稳定，显式音质不触发降级', () => {
-    expect(getQualityCandidates('max')).toEqual(['master', 'lossless', 'exhigh', 'standard'])
-    expect(getQualityCandidates('min')).toEqual(['standard', 'higher', 'exhigh', 'lossless'])
-    expect(getQualityCandidates('lossless')).toEqual(['lossless'])
-    expect(getQualityCandidates('dolby')).toEqual(['dolby', 'lossless', 'exhigh', 'standard'])
   })
 
   test('歌单分类按 QQ 配置反转后的 key 顺序返回', async () => {
