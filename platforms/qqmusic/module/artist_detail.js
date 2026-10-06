@@ -34,7 +34,8 @@ function formatFollowSingerList(data) {
       artist: {
         id: basicInfo.singer_mid || "",
         name: basicInfo.name || "",
-        picUrl: pic.pic || "",
+        // picUrl: pic.pic || "",
+        picUrl: `http://y.gtimg.cn/music/photo_new/T001R800x800M000${basicInfo.singer_mid}.jpg`,
         alias: [],
         description: extraInfo.desc || "",
         musicSize: 0,

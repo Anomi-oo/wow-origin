@@ -65,7 +65,7 @@ function formatSongs(tracks) {
           id: track.album ? track.album.id : 0,
           mid: track.album ? track.album.mid : '',
           name: track.album ? track.album.name : '',
-          picUrl: track.album?.mid ? `https://y.gtimg.cn/music/photo_new/T002R300x300M000${track.album.mid}.jpg` : ''
+          picUrl: track.album?.mid ? `https://y.gtimg.cn/music/photo_new/T002R800x800M000${track.album.mid}.jpg` : ''
         },
         dt: (track.interval || 0) * 1000,
         mv: track.mv?.vid || 0,

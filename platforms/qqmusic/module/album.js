@@ -34,7 +34,7 @@ function formatAlbumDetail(data) {
       id: Number(albumData.id),
       mid: albumData.mid,
       name: albumData.name,
-      coverImgUrl: `https://y.gtimg.cn/music/photo_new/T002R300x300M000${albumData.mid}.jpg`,
+      coverImgUrl: `https://y.gtimg.cn/music/photo_new/T002R800x800M000${albumData.mid}.jpg`,
       trackCount: Number(albumData.total_song_num || 0),
       playCount: 0,
       subCount: 0,
