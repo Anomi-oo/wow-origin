@@ -147,6 +147,7 @@ async function authorize(jumpUrl, session) {
   const result = await session.android.androidLoginCgi('QQConnectLogin.LoginServer', 'QQLogin', { code }, {}, { tmeLoginType: 2 });
   if (result.code !== 0) throw loginError(result.code);
   const cookie = credentialCookies({ loginType: 2, ...result.data });
+  if (session.cancelled) throw new Error('登录会话已取消');
   bindAndroidLoginContext(cookie.musicid, session.android);
   return { status: 'done', cookie };
 }
@@ -199,4 +200,10 @@ async function pollLogin(token) {
   } finally { session.pending = null; }
 }
 
-module.exports = { startLogin, pollLogin, hash33 };
+function cancelLogin(token) {
+  const session = sessions.get(token);
+  if (session) session.cancelled = true;
+  sessions.delete(token);
+}
+
+module.exports = { cancelLogin, startLogin, pollLogin, hash33 };

@@ -250,6 +250,19 @@ export function createLoginRouter({
   const pendingPhones = new Map<string, PendingPhone>();
   const checking = new Set<string>();
   const storage = accountStore ?? workDir;
+  (registry.onDeleted ??= new Set()).add((session) => {
+    for (const pendingMap of [pendingLogins, pendingPhones]) {
+      for (const [token, pending] of pendingMap) {
+        if (pending.apiAccessKey === session.apiAccessKey) {
+          if (pending.platform === 'qq') {
+            require('../platforms/qqmusic/util/qq-login').cancelLogin(token);
+            require('../platforms/qqmusic/util/phone-login').cancelPhoneLogin(token);
+          }
+          pendingMap.delete(token); checking.delete(token);
+        }
+      }
+    }
+  });
 
   function loginTarget(body: any): PendingLogin {
     const mode = normalizeLoginMode(body?.mode);
@@ -280,6 +293,7 @@ export function createLoginRouter({
       result.session.favoriteAlbumsLoaded = false;
     }
     await preloadSessionFavorites(result.session);
+    if (registry.byAccessKey.get(apiAccessKey) !== result.session) throw new BadRequestError('账号已删除');
     onAccountsChanged?.();
     return { status: 'success', mode, ...accountData(result.session, allowAccountLxSources), accountName: result.session.name, message: '登录成功' };
   }
@@ -335,6 +349,7 @@ export function createLoginRouter({
       const existing = mode === 'update' ? registry.byAccessKey.get(apiAccessKey) : undefined;
       const result = await callLoginModule(platformFactory, platform, 'login/qr/key',
         platform === 'qq' ? existingQqDeviceQuery(existing) : {});
+      if (mode === 'update') requireAccount(registry, apiAccessKey);
       const qr = getQrPayload(platform, result);
       const qrImage = qr.qrImage || (qr.qrText
         ? qrCodeDataUrl(qr.qrText)
@@ -429,6 +444,7 @@ export function createLoginRouter({
         phone, countryCode, token,
         ...(target.platform === 'qq' ? existingQqDeviceQuery(existing) : {})
       });
+      if (target.mode === 'update') requireAccount(registry, target.apiAccessKey);
       const data = result.body;
       if (!data || !['sent', 'captcha', 'frequency'].includes(data.status)) throw new UpstreamError('验证码发送返回无效状态');
       const sessionToken = String(data.token || token || '').trim();

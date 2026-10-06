@@ -99,6 +99,7 @@ Aduoer 中填写同一地址，并使用页面生成的 Token
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
+| `ADMIN_MANAGEMENT_PASSWORD` | 空 | 网页管理员密钥；Docker / Node 环境变量或 Cloudflare 运行时 Secret |
 | `PORT` | `3000` | 服务端口 |
 | `HOST` | `0.0.0.0` | 监听地址 |
 | `LOG_LEVEL` | `info` | 日志级别 |
@@ -108,6 +109,16 @@ Aduoer 中填写同一地址，并使用页面生成的 Token
 | `CF_LX_SOURCE_URL` | 空 | Cloudflare 构建时使用的全局洛雪源 |
 
 洛雪源仅用于音频获取（`/v1/track/url`）。自定义源会作为受信任代码运行，请勿配置未经审核的脚本。
+
+### 账号管理
+
+配置 `ADMIN_MANAGEMENT_PASSWORD` 后，网页右上角会显示“管理员模式”。输入密钥后可查看和管理全部账号，刷新或关闭页面后需重新验证；也可点击退出。未配置或值为空时无法进入。桌面版默认具有全部账号管理能力，无需管理员密码。
+
+Docker 在 `.env` 中填写此变量并重建容器（`docker compose up -d --force-recreate`）。Cloudflare 在 Worker 的 **Settings → Variables and Secrets** 中添加同名 Secret 并部署，或运行 `npx wrangler secret put ADMIN_MANAGEMENT_PASSWORD`。这是运行时密钥，不是洛雪源构建变量；本地 Wrangler 开发可写入 `.dev.vars`。
+
+管理员和通过账号 `api_access_key` 登录的用户均可在账号配置页删除该账号。二次确认后会永久删除本服务的数据库记录并清理内存中的账号状态，原音乐平台账号不受影响，旧访问密钥立即失效。
+
+Node / Docker / 桌面启动时会清理旧的 `data/accounts.json`：首次成功导入数据库后删除；已有数据库以数据库为准。迁移失败时保留旧文件并报告错误，避免丢失数据。
 
 ## 开发
 

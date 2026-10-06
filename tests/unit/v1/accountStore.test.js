@@ -109,3 +109,28 @@ describe('SQLite account store', () => {
     reopened.close()
   })
 })
+
+test('startup removes legacy JSON and deleted final account never returns', () => {
+  const workDir = makeWorkDir()
+  const legacy = path.join(workDir, 'data', 'accounts.json')
+  const content = JSON.stringify([{ platform: 'netease', api_access_key: 'old-key' }])
+  fs.writeFileSync(legacy, content)
+  const store = createLocalAccountStore(workDir)
+  expect(fs.existsSync(legacy)).toBe(false)
+  store.delete('old-key')
+  store.close()
+  // Even a restored stale legacy file cannot resurrect an account.
+  fs.writeFileSync(legacy, content)
+  const reopened = createLocalAccountStore(workDir)
+  expect(reopened.list()).toEqual([])
+  expect(fs.existsSync(legacy)).toBe(false)
+  reopened.close()
+})
+
+test('failed legacy JSON migration retains original file', () => {
+  const workDir = makeWorkDir()
+  const legacy = path.join(workDir, 'data', 'accounts.json')
+  fs.writeFileSync(legacy, '{broken')
+  expect(() => createLocalAccountStore(workDir)).toThrow('迁移失败')
+  expect(fs.readFileSync(legacy, 'utf8')).toBe('{broken')
+})

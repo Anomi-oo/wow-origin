@@ -15,6 +15,7 @@ const SEARCH_PARAMS: Record<string, string> = {
   playlists: 'Eg-KAQwIABAAGAAgACgBMABqChAEEAMQCRAFEAo%3D'
 };
 
+let rawTrackCacheGeneration = 0;
 const rawTrackUrlCache = new Map<string, { value: TrackUrl; expiresAt: number }>();
 const rawTrackUrlRequests = new Map<string, Promise<TrackUrl>>();
 
@@ -222,6 +223,7 @@ export class YTMusicClient implements WowAdapter {
   }
 
   async getRawTrackUrl(id: string, quality = 'higher'): Promise<TrackUrl> {
+    const generation = rawTrackCacheGeneration;
     const key = rawTrackCacheKey(this.cookie, id, quality);
     const cached = rawTrackUrlCache.get(key);
     if (cached && cached.expiresAt > Date.now()) return cached.value;
@@ -245,7 +247,7 @@ export class YTMusicClient implements WowAdapter {
         size: Number(selected.contentLength) || 0
       };
       const expiresAt = rawTrackCacheExpiry(result.url);
-      if (expiresAt > Date.now()) {
+      if (generation === rawTrackCacheGeneration && expiresAt > Date.now()) {
         rawTrackUrlCache.set(key, { value: result, expiresAt });
         if (rawTrackUrlCache.size > 256) rawTrackUrlCache.delete(rawTrackUrlCache.keys().next().value!);
       }
@@ -473,4 +475,11 @@ export class YTMusicClient implements WowAdapter {
     if (!succeeded(result)) throw new UpstreamError('YouTube Music 移除歌曲失败');
     return { success: true };
   }
+}
+
+export function clearYTMusicTrackCache(cookie: string): void {
+  rawTrackCacheGeneration += 1;
+  const prefix = `${createHash('sha256').update(cookie).digest('hex')}:`;
+  for (const key of rawTrackUrlCache.keys()) if (key.startsWith(prefix)) rawTrackUrlCache.delete(key);
+  for (const key of rawTrackUrlRequests.keys()) if (key.startsWith(prefix)) rawTrackUrlRequests.delete(key);
 }

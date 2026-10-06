@@ -24,6 +24,7 @@
       <div class="sidebar-status tauri-only"><span class="status-dot"></span>本地代理运行中</div>
     </aside>
 
+    <button id="admin-mode" class="button secondary admin-toggle hidden" type="button">管理员模式</button>
     <main class="content">
       <section id="home-page" class="page tauri-only">
         <header class="page-header">
@@ -140,6 +141,7 @@
             <p id="config-message" class="message"></p>
             <div class="button-row wrap">
               <button class="button secondary back-choose" type="button">返回选择</button>
+              <button id="delete-account" class="button danger hidden" type="button">删除账号</button>
               <button id="relogin" class="button secondary" type="button">重新登录</button>
               <button id="save-config" class="button primary" type="button">保存配置</button>
             </div>
@@ -149,6 +151,21 @@
       </section>
     </main>
   </div>
+  <dialog id="admin-dialog" aria-labelledby="admin-title">
+    <form id="admin-form">
+      <h2 id="admin-title">管理员模式</h2>
+      <label class="field"><span>管理员密钥</span><input id="admin-password" type="password" autocomplete="off" required></label>
+      <p id="admin-error" class="message error" role="alert"></p>
+      <div class="button-row"><button id="admin-cancel" class="button secondary" type="button">取消</button><button id="admin-submit" class="button primary" type="submit">进入管理员模式</button></div>
+    </form>
+  </dialog>
+  <dialog id="delete-dialog" aria-labelledby="delete-title">
+    <h2 id="delete-title">删除账号</h2>
+    <p id="delete-description"></p>
+    <p class="muted">此操作会永久删除本服务保存的账号及相关数据，原平台账号不受影响。</p>
+    <p id="delete-error" class="message error" role="alert"></p>
+    <div class="button-row"><button id="delete-cancel" class="button secondary" type="button">取消</button><button id="delete-confirm" class="button danger" type="button">确认删除</button></div>
+  </dialog>
   <script src="/app.js" defer></script>
 </body>
 </html>

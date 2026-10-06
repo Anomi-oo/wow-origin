@@ -72,10 +72,17 @@ async function phoneLogin(token, code) {
     }, {}, { tmeLoginMethod: 3, tmeLoginType: 0 });
     if (result.code !== 0) throw loginError(result.code);
     const cookie = credentialCookies({ loginType: 0, ...result.data });
+    if (session.cancelled) throw new Error('登录会话已取消');
     bindAndroidLoginContext(cookie.musicid, session.android);
     sessions.delete(token);
     return cookie;
   } finally { session.busy = false; }
 }
 
-module.exports = { sendPhoneCode, phoneLogin };
+function cancelPhoneLogin(token) {
+  const session = sessions.get(token);
+  if (session) { session.cancelled = true; cooldowns.delete(session.key); sending.delete(session.key); }
+  sessions.delete(token);
+}
+
+module.exports = { cancelPhoneLogin, sendPhoneCode, phoneLogin };

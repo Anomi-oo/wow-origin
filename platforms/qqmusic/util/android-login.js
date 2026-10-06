@@ -247,4 +247,8 @@ function peekAndroidLoginContext(musicid) {
   return accountContexts.get(String(musicid || '').replace(/^o/, ''));
 }
 
-module.exports = { createAndroidLoginContext, createAndroidLoginContextFromIdentity, getAndroidLoginContext, bindAndroidLoginContext, peekAndroidLoginContext, encodeIdentity, decodeIdentity, deviceIdFromIdentity, createDevice, qimeiPayload };
+function forgetAndroidLoginContext(musicid) {
+  accountContexts.delete(String(musicid || '').replace(/^o/, ''));
+}
+
+module.exports = { forgetAndroidLoginContext, createAndroidLoginContext, createAndroidLoginContextFromIdentity, getAndroidLoginContext, bindAndroidLoginContext, peekAndroidLoginContext, encodeIdentity, decodeIdentity, deviceIdFromIdentity, createDevice, qimeiPayload };

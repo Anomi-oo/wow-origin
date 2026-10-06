@@ -117,3 +117,18 @@ test('凌晨任务仅刷新网易账号', async () => {
     query: expect.objectContaining({ platform: 'netease' }),
   }))
 })
+
+test('deletion during login check does not repopulate refresh state or update storage', async () => {
+  const { session, registry, store, logger } = fixture('deleted-in-flight')
+  let resolveCheck
+  const callModule = jest.fn(() => new Promise(resolve => { resolveCheck = resolve }))
+  const pending = ensureQQLoginFresh(session, { registry, accountStore: store, logger, platformFactory: { getPlatform: () => ({ callModule }) } })
+  registry.byAccessKey.delete(session.apiAccessKey)
+  registry.sessions.length = 0
+  require('../../../dist/loginRefresh').clearAccountLoginRefresh(session.apiAccessKey)
+  resolveCheck({ code: 200, expired: true })
+  await pending
+  expect(store.update).not.toHaveBeenCalled()
+  expect(qqNextLoginCheckAt.has(session.apiAccessKey)).toBe(false)
+  expect(callModule).toHaveBeenCalledTimes(1)
+})

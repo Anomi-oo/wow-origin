@@ -4,6 +4,7 @@ import { UpstreamError } from '../errors';
 const ORIGIN = 'https://music.youtube.com';
 const YOUTUBE_ORIGIN = 'https://www.youtube.com';
 const VISIONOS_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15';
+let cacheGeneration = 0;
 const visitors = new Map<string, { value: string; expires: number }>();
 const musicVisitors = new Map<string, { value: string; expires: number }>();
 // The same InnerTube endpoint and browser authentication used by sigma67/ytmusicapi.
@@ -17,6 +18,7 @@ export class YTMusicApi {
   constructor(private readonly cookie: string) {}
 
   private async musicVisitorData(): Promise<string> {
+    const generation = cacheGeneration;
     const key = createHash('sha256').update(this.cookie).digest('hex');
     const cached = musicVisitors.get(key);
     if (cached && cached.expires > Date.now()) return cached.value;
@@ -29,21 +31,22 @@ export class YTMusicApi {
         signal: AbortSignal.timeout(20000)
       });
       if (!response.ok) {
-        musicVisitors.set(key, { value: '', expires: Date.now() + 5 * 60 * 1000 });
+        if (generation === cacheGeneration) musicVisitors.set(key, { value: '', expires: Date.now() + 5 * 60 * 1000 });
         return '';
       }
       const html = await response.text();
       const value = html.match(/"VISITOR_DATA":"([^"]+)"/)?.[1] || '';
-      musicVisitors.set(key, { value, expires: Date.now() + (value ? 30 : 5) * 60 * 1000 });
+      if (generation === cacheGeneration) musicVisitors.set(key, { value, expires: Date.now() + (value ? 30 : 5) * 60 * 1000 });
       return value;
     } catch {
       // A missing visitor ID must not prevent the authenticated request itself.
-      musicVisitors.set(key, { value: '', expires: Date.now() + 5 * 60 * 1000 });
+      if (generation === cacheGeneration) musicVisitors.set(key, { value: '', expires: Date.now() + 5 * 60 * 1000 });
       return '';
     }
   }
 
   private async visitorData(videoId: string): Promise<string> {
+    const generation = cacheGeneration;
     const key = createHash('sha256').update(this.cookie).digest('hex');
     const cached = visitors.get(key);
     if (cached && cached.expires > Date.now()) return cached.value;
@@ -63,7 +66,7 @@ export class YTMusicApi {
     const html = await response.text();
     const value = html.match(/"VISITOR_DATA":"([^"]+)"/)?.[1];
     if (!value) throw new UpstreamError('YouTube 未返回访客标识');
-    visitors.set(key, { value, expires: Date.now() + 30 * 60 * 1000 });
+    if (generation === cacheGeneration) visitors.set(key, { value, expires: Date.now() + 30 * 60 * 1000 });
     return value;
   }
 
@@ -157,4 +160,10 @@ export class YTMusicApi {
   browse(id: string, params?: string): Promise<any> {
     return this.request('browse', { browseId: id, ...(params ? { params } : {}) });
   }
+}
+
+export function clearYTMusicVisitorCache(cookie: string): void {
+  cacheGeneration += 1;
+  const key = createHash('sha256').update(cookie).digest('hex');
+  visitors.delete(key); musicVisitors.delete(key);
 }

@@ -19,6 +19,7 @@ export async function preloadSessionFavorites(session: MusicAccountSession): Pro
   ] as const) {
     try {
       const items = await load();
+      if (!session.cookie) return;
       markLoaded();
       console.log(`[onload] preloaded ${items.length} ${session.platform} favorite ${label} for ${session.name}`);
     } catch (error) {

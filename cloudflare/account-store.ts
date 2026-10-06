@@ -93,6 +93,10 @@ export class DurableObjectAccountStore implements AccountStore {
     `, ...values(account));
   }
 
+  delete(apiAccessKey: string): void {
+    this.sql.exec('DELETE FROM accounts WHERE api_access_key = ?', apiAccessKey);
+  }
+
   update(apiAccessKey: string, changes: Partial<RawMusicAccount>): void {
     const row = rows(this.sql.exec(`
       SELECT id, platform, name, cookie, api_access_key, stateless, use_luoxue, lx_source, deviceId AS device_id, device_state

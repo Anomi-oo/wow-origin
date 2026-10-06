@@ -137,3 +137,14 @@ input[type="checkbox"]:checked::after { transform:translateX(19px); }
   .tauri nav { display:grid; }
   .tauri .sidebar-status { display:flex; }
 }
+
+.admin-toggle { position:absolute; top:16px; right:20px; z-index:2; }
+dialog { width:min(440px,calc(100% - 32px)); padding:24px; color:var(--text); background:var(--panel); border:1px solid var(--line); border-radius:18px; }
+dialog::backdrop { background:rgba(0,0,0,.65); }
+dialog p { overflow-wrap:anywhere; }
+.button.danger { color:var(--danger); border-color:#7f1d1d; background:#3b151b; }
+@media (max-width:760px) {
+  .admin-toggle { position:static; justify-self:end; margin:12px 20px 0; }
+  .web-admin .sidebar { flex-direction:column; align-items:stretch; }
+  .web-admin nav { display:grid; }
+}

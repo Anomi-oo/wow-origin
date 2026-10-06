@@ -1,4 +1,7 @@
 import os from 'node:os';
+import { createHash, timingSafeEqual } from 'node:crypto';
+import { deleteAccount } from './accounts';
+import type { AccountStore } from './storage';
 import type { Request, Response, Router } from 'express';
 import express from 'express';
 import type { AccountSessionRegistry } from './accounts';
@@ -74,14 +77,40 @@ function browserEndpoint(req: Request): { ip: string; port: number } {
 export function createDashboardRouter(options: {
   registry?: AccountSessionRegistry;
   cloudflare?: boolean;
+  adminManagementPassword?: string;
+  accountStore?: AccountStore;
+  onAccountsChanged?: () => void;
 } = {}): Router {
   const router = express.Router();
 
-  router.get('/accounts', (_req: Request, res: Response) => {
-    if (process.env.WOW_DESKTOP !== '1' || !options.registry) {
-      res.status(404).json({ code: 404, message: 'API endpoint not found', data: null });
-      return;
+  const password = options.adminManagementPassword ?? '';
+  const enabled = password.trim().length > 0;
+  const digest = (value: string) => createHash('sha256').update(value).digest();
+  const authorize: express.RequestHandler = (req, res, next) => {
+    res.set('Cache-Control', 'no-store');
+    if (process.env.WOW_DESKTOP === '1') { next(); return; }
+    if (!enabled) { res.status(404).json({ code: 404, message: '管理员模式未启用', data: null }); return; }
+    const token = /^Bearer (.+)$/.exec(req.header('Authorization') || '')?.[1] || '';
+    if (!timingSafeEqual(digest(token), digest(password))) {
+      res.status(401).json({ code: 401, message: '管理员密钥错误', data: null }); return;
     }
+    next();
+  };
+  router.post('/accounts/delete', (req, res, next) => {
+    res.set('Cache-Control', 'no-store');
+    const key = req.body?.api_access_key;
+    if (typeof key !== 'string' || !key) { res.status(400).json({ code: 400, message: '缺少账号密钥' }); return; }
+    if (!options.registry?.byAccessKey.has(key) || !options.accountStore) {
+      res.status(404).json({ code: 404, message: '账号不存在' }); return;
+    }
+    try {
+      deleteAccount(key, options.registry, options.accountStore);
+      options.onAccountsChanged?.();
+      res.json({ code: 200, data: null });
+    } catch (error) { next(error); }
+  });
+  router.get('/accounts', authorize, (_req: Request, res: Response) => {
+    if (!options.registry) { res.status(404).json({ code: 404, message: '账号列表不可用' }); return; }
     res.json({
       code: 200,
       data: options.registry.sessions.map((session) => ({
@@ -145,6 +174,7 @@ export function createDashboardRouter(options: {
         code: 200,
         data: {
           status: 'running',
+          adminManagementEnabled: enabled,
           runtime: options.cloudflare ? 'cloudflare' : desktop ? 'desktop' : 'node',
           accountLxSources: !options.cloudflare,
           port,

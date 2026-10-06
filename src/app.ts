@@ -10,9 +10,10 @@ import { AccountSessionRegistry, extractAuthorizationToken, loadAccountSessions 
 import type { AccountStore } from './storage';
 import { createLoginRouter } from './login';
 import { createDashboardRouter } from './dashboard';
-import { createLoginRefreshScheduler, ensureQQLoginFresh } from './loginRefresh';
+import { createLoginRefreshScheduler, ensureQQLoginFresh, clearAccountLoginRefresh } from './loginRefresh';
 import { createLxSourceUpdateScheduler } from './lx-resource/scheduler';
-import { YTMusicClient } from './clients/YTMusicClient';
+import { clearYTMusicVisitorCache } from './ytmusic/api';
+import { YTMusicClient, clearYTMusicTrackCache } from './clients/YTMusicClient';
 import { verifyStreamRequest } from './ytmusic/stream';
 import { normalizeFragmentedMp4Stream, rebaseMp4Range, sliceByteRange } from './ytmusic/mp4';
 import type { LxSourceLifecycle, LxTrackUrlResolver } from './lx-resource/types';
@@ -36,8 +37,10 @@ class MultiPlatformServer {
   private readonly cloudflare: boolean;
   private readonly serveStatic: boolean;
   private readonly preload: boolean;
+  private readonly adminManagementPassword: string;
 
   constructor(options: CreateAppOptions = {}) {
+    this.adminManagementPassword = options.adminManagementPassword ?? process.env.ADMIN_MANAGEMENT_PASSWORD ?? '';
     this.logger = new Logger({ component: 'server' });
     this.accountStore = options.accountStore ?? loadLocalAccountStore();
     this.lxSourceManager = options.lxSourceManager ?? loadLocalLxSourceManager();
@@ -100,6 +103,12 @@ class MultiPlatformServer {
     this.app!.use(cookieParser());
     if (this.serveStatic) this.app!.use(express.static(path.join(__dirname, '..', 'public')));
     this.accountSessions = loadAccountSessions(this.accountStore);
+    (this.accountSessions.onDeleted ??= new Set()).add(session => {
+      clearAccountLoginRefresh(session.apiAccessKey);
+      clearYTMusicTrackCache(session.cookie);
+      clearYTMusicVisitorCache(session.cookie);
+      require('../core/PlatformCache').globalCache.clear();
+    });
     this.reconcileLxSources();
 
     this.app!.use((req: Request, res: Response, next: NextFunction) => {
@@ -129,7 +138,10 @@ class MultiPlatformServer {
 
     this.app!.use('/app/api', createDashboardRouter({
       registry: this.accountSessions,
-      cloudflare: this.cloudflare
+      cloudflare: this.cloudflare,
+      adminManagementPassword: this.adminManagementPassword,
+      accountStore: this.accountStore,
+      onAccountsChanged: () => this.reconcileLxSources()
     }));
     this.app!.use('/login', createLoginRouter({
       registry: this.accountSessions,
@@ -326,6 +338,7 @@ class MultiPlatformServer {
 
 /** 创建并初始化 Express 应用；监听端口由 server.ts 负责。 */
 export interface CreateAppOptions {
+  adminManagementPassword?: string;
   accountStore?: AccountStore;
   lxSourceManager?: AppLxSourceManager;
   cloudflare?: boolean;

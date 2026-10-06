@@ -10,6 +10,7 @@ import { CloudflareLxSourceManager } from './lx-manager';
 const ASSET_PATHS = new Set(['/', '/login', '/app.js', '/styles.css']);
 
 export interface Env {
+  ADMIN_MANAGEMENT_PASSWORD?: string;
   ORIGIN: DurableObjectNamespace<OriginDurableObject>;
   ASSETS: Fetcher;
 }
@@ -25,6 +26,7 @@ export class OriginDurableObject extends DurableObject<Env> {
       const accountStore = new DurableObjectAccountStore(ctx.storage.sql as any);
       const lxSourceManager = new CloudflareLxSourceManager();
       this.app = await createApp({
+        adminManagementPassword: env.ADMIN_MANAGEMENT_PASSWORD ?? '',
         accountStore,
         lxSourceManager,
         cloudflare: true,

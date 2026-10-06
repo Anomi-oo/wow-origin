@@ -81,6 +81,7 @@ class BasePlatform {
       }
 
       // 优化: 先检查缓存,命中则直接返回,避免不必要的参数验证
+      const cacheGeneration = this.cache.generation
       let cachedResult = null
       if (this.cacheEnabled) {
         // 获取路由特定的TTL配置
@@ -117,7 +118,7 @@ class BasePlatform {
       })
 
       // 缓存结果
-      if (this.cacheEnabled) {
+      if (this.cacheEnabled && this.cache.generation === cacheGeneration) {
         const cacheConfigs = PlatformConfig.getCacheConfigs(this.name)
         const routeConfig = cacheConfigs[route]
         if (this._isRouteCacheEnabled(routeConfig, query)) {

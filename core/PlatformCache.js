@@ -26,6 +26,7 @@ class PlatformCache {
     this.stats = { hits: 0, misses: 0 }
 
     // 使用Map存储键到节点的映射 (O(1)查找)
+    this.generation = 0
     this.cache = new Map()
 
     // 双向链表维护LRU顺序
@@ -170,6 +171,7 @@ class PlatformCache {
    * 清空所有缓存
    */
   clear() {
+    this.generation += 1
     this.cache.clear()
     this.head.next = this.tail
     this.tail.prev = this.head

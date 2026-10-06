@@ -1,11 +1,14 @@
 (() => {
   const $ = (id) => document.getElementById(id);
   const state = {
+    adminPassword: '', adminSequence: 0, deleteKey: '',
     apiBase: '', page: 'home', mode: '', platform: 'qq', token: '', timer: null,
     accountQrTimer: null, accountQrSequence: 0, account: null, status: null,
     method: 'qr', loginSequence: 0, phoneToken: '', phoneRetryAt: 0, phoneTimer: null
   };
 
+  function isAdmin() { return isTauri() || Boolean(state.adminPassword); }
+  function adminHeaders(password = state.adminPassword) { return password ? { Authorization: `Bearer ${password}` } : {}; }
   function isTauri() { return Boolean(window.__TAURI__?.core?.invoke); }
   document.documentElement.classList.toggle('tauri', isTauri());
   function initialPage() {
@@ -56,6 +59,7 @@
       } else {
         state.status = await request('/app/api/status');
         applyRuntimeCapabilities();
+        $('admin-mode').classList.toggle('hidden', !state.status.adminManagementEnabled);
       }
       $('splash').classList.add('hidden');
       $('app-shell').classList.remove('hidden');
@@ -104,7 +108,7 @@
     $('login-error').textContent = '';
     updateAccountNavigationActive();
   }
-  function stopPolling() { if (state.timer) clearTimeout(state.timer); state.timer = null; state.token = ''; state.loginSequence += 1; }
+  function stopPolling() { $('account-config').removeAttribute('inert'); $('account-config').removeAttribute('aria-busy'); if (state.timer) clearTimeout(state.timer); state.timer = null; state.token = ''; state.loginSequence += 1; }
   function clearLoginInputs() {
     state.phoneToken = ''; $('phone-code').value = ''; $('login-cookie').value = '';
     clearPhoneCaptcha();
@@ -129,11 +133,12 @@
   function showError(error) { $('login-error').textContent = error.message || String(error); }
 
   async function verifyAccount() {
+    const sequence = state.loginSequence;
     const button = $('verify-submit'); setBusy(button, true, '正在验证…');
     try {
       const account = await jsonRequest('/login/api/verify-key', 'POST', { api_access_key: $('verify-key').value.trim() });
-      showAccount(account);
-    } catch (error) { showError(error); } finally { setBusy(button, false); }
+      if (sequence === state.loginSequence) showAccount(account);
+    } catch (error) { if (sequence === state.loginSequence) showError(error); } finally { setBusy(button, false); }
   }
   async function startScan() {
     prepareLogin('qr');
@@ -241,6 +246,7 @@
     stopPolling(); state.account = account; state.mode = 'update'; state.platform = account.platform;
     clearLoginInputs();
     setPlatform(account.platform);
+    $('delete-account').classList.remove('hidden');
     $('account-platform').textContent = platformLabel(account.platform);
     $('account-key').textContent = account.apiAccessKey; $('account-name').value = account.name || account.accountName || '';
     $('account-stateless').checked = Boolean(account.stateless); $('account-luoxue').checked = account.useLuoxue !== false;
@@ -248,7 +254,7 @@
     renderSources(Array.isArray(account.lxSource) ? account.lxSource : []); $('config-message').textContent = '';
     showStep('account-config');
     renderAccountQr();
-    if (isTauri()) loadDesktopAccounts().catch(() => {});
+    if (isAdmin()) loadDesktopAccounts().catch(() => {});
   }
 
   function selectedOriginHost() {
@@ -285,7 +291,7 @@
   }
 
   function updateAccountNavigationActive() {
-    if (!isTauri()) return;
+    if (!isAdmin()) return;
     const activeKey = state.page === 'login' && !$('account-config').classList.contains('hidden')
       ? state.account?.apiAccessKey
       : '';
@@ -306,13 +312,16 @@
   }
 
   async function loadDesktopAccounts() {
-    if (!isTauri()) return;
+    if (!isAdmin()) return;
     ensureDesktopAccountNavigation();
     const list = $('desktop-account-list');
+    const sequence = state.adminSequence;
     let accounts;
     try {
-      accounts = await request('/app/api/accounts');
+      accounts = await request('/app/api/accounts', { headers: adminHeaders() });
+      if (sequence !== state.adminSequence || !isAdmin()) return;
     } catch (error) {
+      if (sequence !== state.adminSequence || !isAdmin()) return;
       list.replaceChildren();
       const message = document.createElement('span'); message.className = 'account-nav-empty'; message.textContent = '账号列表读取失败'; list.append(message);
       return;
@@ -336,15 +345,24 @@
   }
 
   async function openDesktopAccount(apiAccessKey) {
-    if (!isTauri()) return;
+    if (!isAdmin()) return;
     stopPolling(); clearLoginInputs();
     const sequence = state.loginSequence;
-    navigate('login'); showStep('login-choose'); $('login-error').textContent = '正在加载账号配置…';
+    navigate('login');
+    $('account-config').setAttribute('inert', '');
+    $('account-config').setAttribute('aria-busy', 'true');
+    $('login-error').textContent = '正在加载账号配置…';
     try {
       const account = await jsonRequest('/login/api/verify-key', 'POST', { api_access_key: apiAccessKey });
       if (sequence !== state.loginSequence) return;
       showAccount(account);
-    } catch (error) { if (sequence === state.loginSequence) showError(error); }
+    } catch (error) {
+      if (sequence === state.loginSequence) {
+        $('account-config').removeAttribute('inert');
+        $('account-config').removeAttribute('aria-busy');
+        showError(error);
+      }
+    }
   }
   function renderSources(sources) {
     const list = $('lx-source-list'); list.replaceChildren();
@@ -360,6 +378,7 @@
     row.append(input, remove); list.append(row);
   }
   async function saveConfig() {
+    const sequence = state.loginSequence;
     const button = $('save-config'); setBusy(button, true, '正在保存…'); $('config-message').className = 'message';
     try {
       const lxSource = state.status?.accountLxSources === false
@@ -370,13 +389,80 @@
         api_access_key: state.account.apiAccessKey, name: $('account-name').value.trim(),
         stateless: $('account-stateless').checked, useLuoxue: $('account-luoxue').checked, lxSource
       });
+      if (sequence !== state.loginSequence) return;
       state.account = account; $('config-message').textContent = '配置已保存'; $('config-message').className = 'message success';
       renderSources(account.lxSource || []);
       renderAccountQr();
-      if (isTauri()) loadDesktopAccounts();
+      if (isAdmin()) loadDesktopAccounts();
     } catch (error) { $('config-message').textContent = error.message; $('config-message').className = 'message error'; }
     finally { setBusy(button, false); }
   }
+
+  function clearAccountView() {
+    backToChoose();
+    state.accountQrSequence += 1;
+    clearTimeout(state.accountQrTimer);
+    $('account-key').textContent = ''; $('account-name').value = '';
+    $('account-origin-qr').removeAttribute('src'); $('lx-source-list').replaceChildren();
+    $('verify-key').value = ''; $('delete-account').classList.add('hidden');
+  }
+  function leaveAdmin() {
+    state.adminSequence += 1; state.adminPassword = ''; state.deleteKey = '';
+    clearAccountView();
+    $('desktop-account-navigation')?.remove();
+    document.documentElement.classList.remove('web-admin');
+    $('admin-mode').textContent = '管理员模式';
+  }
+  $('admin-mode').addEventListener('click', () => {
+    if (state.adminPassword) { leaveAdmin(); return; }
+    $('admin-error').textContent = ''; $('admin-password').value = '';
+    $('admin-dialog').showModal(); $('admin-password').focus();
+  });
+  $('admin-cancel').addEventListener('click', () => { state.adminSequence += 1; $('admin-dialog').close(); });
+  $('admin-dialog').addEventListener('close', () => { $('admin-password').value = ''; });
+  $('admin-dialog').addEventListener('cancel', () => { state.adminSequence += 1; });
+  $('admin-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if ($('admin-submit').disabled) return;
+    const sequence = ++state.adminSequence;
+    const password = $('admin-password').value;
+    setBusy($('admin-submit'), true, '正在验证…'); $('admin-error').textContent = '';
+    try {
+      await request('/app/api/accounts', { headers: adminHeaders(password) });
+      if (sequence !== state.adminSequence || !$('admin-dialog').open) return;
+      state.adminPassword = password;
+      $('admin-dialog').close();
+      document.documentElement.classList.add('web-admin');
+      $('admin-mode').textContent = '退出管理员模式';
+      await loadDesktopAccounts();
+      $('delete-account').classList.toggle('hidden', !state.account);
+    } catch (error) { if (sequence === state.adminSequence) $('admin-error').textContent = error.message; }
+    finally { setBusy($('admin-submit'), false); }
+  });
+  $('delete-account').addEventListener('click', () => {
+    if (!state.account) return;
+    state.deleteKey = state.account.apiAccessKey;
+    $('delete-description').textContent = `确定删除账号“${state.account.name || state.account.accountName || ''}”吗？此操作无法撤销。`;
+    $('delete-error').textContent = ''; $('delete-dialog').showModal();
+    $('delete-cancel').focus();
+  });
+  $('delete-cancel').addEventListener('click', () => $('delete-dialog').close());
+  $('delete-dialog').addEventListener('cancel', event => { if ($('delete-confirm').disabled) event.preventDefault(); });
+  $('delete-confirm').addEventListener('click', async () => {
+    if (!state.deleteKey || $('delete-confirm').disabled) return;
+    const sequence = state.adminSequence;
+    setBusy($('delete-confirm'), true, '正在删除…'); $('delete-cancel').disabled = true;
+    try {
+      await request('/app/api/accounts/delete', {
+        method: 'POST', headers: { ...adminHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ api_access_key: state.deleteKey })
+      });
+      if (sequence !== state.adminSequence) return;
+      $('delete-dialog').close(); state.deleteKey = ''; clearAccountView();
+      await loadDesktopAccounts();
+    } catch (error) { $('delete-error').textContent = error.message; }
+    finally { setBusy($('delete-confirm'), false); $('delete-cancel').disabled = false; }
+  });
 
   document.querySelectorAll('.nav-item').forEach((button) => button.addEventListener('click', () => navigate(button.dataset.page)));
   window.addEventListener('popstate', () => navigate(initialPage(), false));

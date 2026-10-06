@@ -7,6 +7,7 @@ export interface AccountStore {
   readonly location: string;
   list(): RawMusicAccount[];
   insert(account: RawMusicAccount): void;
+  delete(apiAccessKey: string): void;
   update(apiAccessKey: string, changes: Partial<RawMusicAccount>): void;
 }
 
@@ -123,7 +124,12 @@ export class SqliteAccountStore implements AccountStore {
         platform, name, cookie, api_access_key, stateless, use_luoxue, lx_source, deviceId, device_state
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    this.migrateLegacyAccounts(workDir);
+    this.database.exec('CREATE TABLE IF NOT EXISTS account_migrations (name TEXT PRIMARY KEY)');
+    if (!this.database.prepare('SELECT name FROM account_migrations WHERE name = ?').get('legacy-json')) {
+      this.migrateLegacyAccounts(workDir);
+      this.database.prepare('INSERT INTO account_migrations (name) VALUES (?)').run('legacy-json');
+    }
+    fs.rmSync(path.join(workDir, 'data', 'accounts.json'), { force: true });
   }
 
   list(): RawMusicAccount[] {
@@ -158,6 +164,10 @@ export class SqliteAccountStore implements AccountStore {
     `).run(...accountValues(account), row.id);
   }
 
+  delete(apiAccessKey: string): void {
+    this.database.prepare('DELETE FROM accounts WHERE api_access_key = ?').run(apiAccessKey);
+  }
+
   close(): void {
     this.database.close();
   }
@@ -176,11 +186,10 @@ export class SqliteAccountStore implements AccountStore {
       accounts = JSON.parse(content);
     } catch (error) {
       console.error(`[accounts] JSON 迁移失败: ${legacyPath}`, error);
-      return;
+      throw new Error(`旧账号文件迁移失败: ${legacyPath}`, { cause: error });
     }
     if (!Array.isArray(accounts)) {
-      console.error(`[accounts] accounts.json 必须是数组: ${legacyPath}`);
-      return;
+      throw new Error(`accounts.json 必须是数组: ${legacyPath}`);
     }
 
     this.database.exec('BEGIN IMMEDIATE');
