@@ -7,7 +7,8 @@ export function getExactLxQuality(platform: MusicPlatform, quality: string | und
     standard: '128k',
     exhigh: '320k',
     lossless: 'flac',
-    ...(platform === 'netease' ? { hires: 'hires' as const, sky: 'atmos' as const, master: 'master' as const } : {})
+    master: 'master',
+    ...(platform === 'netease' ? { hires: 'hires' as const, sky: 'atmos' as const } : {})
   };
   const mapped = quality ? mapping[quality] : undefined;
   return mapped && supported.includes(mapped) ? mapped : undefined;

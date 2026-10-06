@@ -107,6 +107,14 @@ describe('QQMusic v1 依赖模块', () => {
     expect(result.data[0].url).toBe('')
   })
 
+  test('QQ 匿名账号请求臻品母带不要求 deviceId', async () => {
+    getAndroidLoginContext.mockClear()
+    const result = await songUrl({ mid: 'songMid', level: 'master', uin: '', qm_keyst: '' })
+
+    expect(result.data[0]).toMatchObject({ url: '', level: 'master' })
+    expect(getAndroidLoginContext).not.toHaveBeenCalled()
+  })
+
   test.each([
     ['atmos2', 'Q000', '.flac', 'flac'],
     ['atmos51', 'Q001', '.flac', 'flac'],

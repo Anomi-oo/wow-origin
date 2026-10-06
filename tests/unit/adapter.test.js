@@ -127,7 +127,7 @@ describe('Wow adapter', () => {
     expect(lxResolver.resolveTrackUrl).not.toHaveBeenCalled()
   })
 
-  test('QQ 新音质优先调用官方模块，避免洛雪 SQ 冒充高音质', async () => {
+  test('QQ 母带没有洛雪精确档位时调用官方模块', async () => {
     const officialTrackUrl = {
       url: 'https://official.test/master.flac', quality: 'master', format: 'flac', bitrate: null, size: 100
     }
@@ -140,7 +140,21 @@ describe('Wow adapter', () => {
 
     await expect(adapter.getTrackUrl('track-1', 'master')).resolves.toEqual(officialTrackUrl)
     expect(officialSpy).toHaveBeenCalledWith('track-1', 'master')
-    expect(lxResolver.resolveTrackUrl).not.toHaveBeenCalled()
+    expect(lxResolver.resolveTrackUrl).toHaveBeenCalledWith('qq', 'track-1', 'master', [], { allowFallback: false })
+  })
+
+  test('QQ 匿名账号可直接使用洛雪母带链接', async () => {
+    const lxTrackUrl = { url: 'https://lx.test/master.flac', quality: 'master', format: '', bitrate: null, size: 0 }
+    const lxResolver = { resolveTrackUrl: jest.fn().mockResolvedValue(lxTrackUrl) }
+    const officialSpy = jest.spyOn(QQClient.prototype, 'getTrackUrlForQuality')
+    const adapter = createAdapter({
+      platform: 'qq', name: 'QQ', cookie: '', apiAccessKey: 'token-1',
+      useLuoxue: true, lxSource: [], favoriteTrackIds: new Set()
+    }, lxResolver)
+
+    await expect(adapter.getTrackUrl('track-1', 'master')).resolves.toEqual(lxTrackUrl)
+    expect(lxResolver.resolveTrackUrl).toHaveBeenCalledWith('qq', 'track-1', 'master', [], { allowFallback: false })
+    expect(officialSpy).not.toHaveBeenCalled()
   })
 
   test.each([

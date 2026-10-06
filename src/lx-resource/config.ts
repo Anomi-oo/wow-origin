@@ -82,7 +82,7 @@ export function mapMusicPlatformToLx(platform: MusicPlatform): LxPlatform {
 
 export function getLxQualityCandidates(requestedQuality: string | undefined, supported: readonly LxQuality[], platform: MusicPlatform = 'netease'): LxQuality[] {
   const available = platform === 'qq'
-    ? supported.filter((quality) => ['128k', '320k', 'flac', 'flac24bit'].includes(quality))
+    ? supported.filter((quality) => ['128k', '320k', 'flac', 'flac24bit', 'master'].includes(quality))
     : supported;
   if (available.length === 0 || requestedQuality === 'jyeffect') return [];
   const fallback: LxQuality[] = ['flac', '320k', '128k'];

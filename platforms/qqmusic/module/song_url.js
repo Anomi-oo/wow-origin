@@ -43,6 +43,10 @@ module.exports = async (query, request) => {
   const filename = `${qualityConfig.prefix}${songMid}${songMid}${qualityConfig.suffix}`
 
   if (ENHANCED_QUALITIES.has(quality)) {
+    // 匿名账号没有 Android 登录身份；让上层继续尝试普通音质或洛雪源。
+    if (uin === '0' || !qm_keyst) {
+      return { data: [{ id: query.id, mid: songMid, url: '', level: quality }] }
+    }
     const android = getAndroidLoginContext(uin, query.qq_android_identity, { requireExisting: true })
     const result = await android.androidLoginCgi('music.vkey.GetVkey', 'UrlGetVkey', {
       uin, filename: [filename], guid: randomUUID().replace(/-/g, ''),

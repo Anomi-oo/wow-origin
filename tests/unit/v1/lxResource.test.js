@@ -12,6 +12,7 @@ const {
   selectLxQuality,
   millisecondsUntilNextOneAm
 } = require('../../../dist/lx-resource')
+const { getExactLxQuality } = require('../../../dist/lx-resource/quality')
 
 const validScript = `/**
  * @name 测试源
@@ -124,7 +125,9 @@ describe('LX resource', () => {
     expect(getLxQualityCandidates('jyeffect', ['flac', '320k', '128k'])).toEqual([])
     expect(selectLxQuality('standard', ['320k'])).toBeUndefined()
     expect(selectLxQuality('max', ['128k', 'flac24bit'])).toBe('flac24bit')
-    expect(selectLxQuality('max', ['flac', 'hires', 'atmos', 'master'], 'qq')).toBe('flac')
+    expect(selectLxQuality('max', ['flac', 'hires', 'atmos', 'master'], 'qq')).toBe('master')
+    expect(getExactLxQuality('qq', 'master', ['flac', 'master'])).toBe('master')
+    expect(getExactLxQuality('qq', 'master', ['flac'])).toBeUndefined()
     expect(parseLxScriptInfo(`/*!
       * @name 感叹号文件头
       */`).name).toBe('感叹号文件头')

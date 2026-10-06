@@ -53,7 +53,7 @@ export function createAdapter(
   const defaultGetTrackUrl = client.getTrackUrlForQuality.bind(client);
   const getLxTrackUrl = async (id: string, quality?: string): Promise<TrackUrl | undefined> => {
     if (account.platform === 'netease' && quality === 'jyeffect') return undefined;
-    if (account.platform === 'qq' && ['atmos2', 'atmos51', 'dolby', 'master'].includes(quality || '')) return undefined;
+    if (account.platform === 'qq' && ['atmos2', 'atmos51', 'dolby'].includes(quality || '')) return undefined;
     try {
       const lxTrackUrl = await lxTrackUrlResolver.resolveTrackUrl(account.platform, id, quality, account.lxSource || [], { allowFallback: false });
       if (hasValidAudioUrl(lxTrackUrl)) return lxTrackUrl;
