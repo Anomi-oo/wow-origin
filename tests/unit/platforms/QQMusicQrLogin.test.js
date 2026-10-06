@@ -1,7 +1,7 @@
 const { responseCookies } = require('../../../platforms/qqmusic/util/login-http')
 
 describe('shared QQ QR login', () => {
-  let qr, http, androidLoginCgi, bindAndroidLoginContext
+  let qr, http, androidLoginCgi, bindAndroidLoginContext, errorLog
   beforeEach(() => {
     jest.resetModules()
     androidLoginCgi = jest.fn()
@@ -11,6 +11,7 @@ describe('shared QQ QR login', () => {
     }))
     qr = require('../../../platforms/qqmusic/util/qq-login')
     http = jest.spyOn(global, 'fetch').mockRejectedValue(new Error('Unmocked request'))
+    errorLog = jest.spyOn(console, 'error').mockImplementation(() => {})
   })
   afterEach(() => {
     jest.restoreAllMocks()
@@ -84,12 +85,28 @@ describe('shared QQ QR login', () => {
     expect(await qr.pollLogin(token)).toMatchObject({ status: 'error', msg: expect.stringContaining('p_skey') })
     expect(await qr.pollLogin(token)).toEqual({ status: 'expired' })
   })
+  test('logs the Android login stage when credential exchange fails', async () => {
+    const { token } = await start()
+    http.mockResolvedValueOnce(callback())
+      .mockResolvedValueOnce(new Response('', { status: 302, headers: { 'set-cookie': 'p_skey=graph-secret; Path=/' } }))
+      .mockResolvedValueOnce(new Response('', { status: 302, headers: { location: 'https://y.qq.com/callback?code=abc' } }))
+    androidLoginCgi.mockRejectedValueOnce(new TypeError('Workers cipher input must be a Buffer'))
+
+    expect(await qr.pollLogin(token)).toMatchObject({ status: 'error', msg: 'Workers cipher input must be a Buffer' })
+    expect(errorLog).toHaveBeenCalledWith('[qq-login] QR login failed', expect.objectContaining({
+      stage: 'android_login', name: 'TypeError', frames: expect.stringContaining('QQMusicQrLogin.test.js')
+    }))
+  })
   test('network failure does not expose credential-bearing URL', async () => {
     const { token } = await start()
     http.mockRejectedValueOnce(new Error('https://example.com/?secret=private-value'))
     const result = await qr.pollLogin(token)
     expect(result.status).toBe('error')
     expect(result.msg).not.toContain('private-value')
+    expect(errorLog).toHaveBeenCalledWith('[qq-login] QR login failed', expect.objectContaining({
+      stage: 'ptqrlogin', name: 'Error'
+    }))
+    expect(JSON.stringify(errorLog.mock.calls)).not.toContain('private-value')
   })
   test('parses combined and separate Set-Cookie without breaking Expires', () => {
     const combined = 'one=1; Expires=Wed, 21 Oct 2030 07:28:00 GMT; Path=/, p_skey=a=b; Path=/'

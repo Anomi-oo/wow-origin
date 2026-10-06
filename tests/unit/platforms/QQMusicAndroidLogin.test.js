@@ -51,6 +51,23 @@ describe('QQ Android login identity', () => {
     expect(JSON.parse(http.mock.calls[3][1].body).comm.authst).toBe('new-key')
   })
 
+  test('passes Buffer input to QIMEI AES encryption for Workers crypto', () => {
+    const crypto = require('node:crypto')
+    const createCipheriv = crypto.createCipheriv
+    jest.spyOn(crypto, 'createCipheriv').mockImplementation((...args) => {
+      const cipher = createCipheriv(...args)
+      const update = cipher.update.bind(cipher)
+      cipher.update = (data, ...rest) => {
+        if (!Buffer.isBuffer(data)) throw new TypeError('Workers Cipheriv.update requires a Buffer')
+        return update(data, ...rest)
+      }
+      return cipher
+    })
+    const { createDevice, qimeiPayload } = require('../../../platforms/qqmusic/util/android-login')
+    expect(qimeiPayload(createDevice()).reserved).toContain('"oz"')
+    expect(crypto.createCipheriv).toHaveBeenCalledTimes(2)
+  })
+
   test('does not send a login request when QIMEI cannot be acquired', async () => {
     http.mockResolvedValueOnce(Response.json({ data: '{}' }))
     const { createAndroidLoginContext } = require('../../../platforms/qqmusic/util/android-login')
