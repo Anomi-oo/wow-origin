@@ -194,6 +194,8 @@ async function pollLogin(token) {
     console.error('[qq-login] QR login failed', {
       stage: session.stage || 'unknown',
       name: error?.name || 'Error',
+      code: error?.diagnostics?.code,
+      details: error?.diagnostics?.details,
       frames: String(error?.stack || '').split('\n').slice(1, 7).join('\n'),
     });
     return { status: 'error', msg: error.message };

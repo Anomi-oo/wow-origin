@@ -26,12 +26,17 @@ class Result {
    * @returns {Object} 标准化错误响应
    */
   static error(error, code = 500) {
-    console.error('Error:', error)
-    return {
+    console.error('Error:', error?.diagnostics
+      ? { message: error.message, ...error.diagnostics }
+      : error)
+    const result = {
       code,
       message: typeof error === 'string' ? error : (error?.message || 'Unknown error'),
       data: null
     }
+    // Server-only metadata must survive platform wrapping without entering JSON.
+    if (error?.diagnostics) Object.defineProperty(result, 'diagnostics', { value: error.diagnostics })
+    return result
   }
 }
 

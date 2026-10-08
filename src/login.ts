@@ -91,7 +91,7 @@ async function callLoginModule(
     connection: { remoteAddress: 'login-page' }
   });
   if (!result || result.code !== 200) {
-    throw new UpstreamError(result?.message || '登录接口调用失败');
+    throw new UpstreamError(result?.message || '登录接口调用失败', result?.diagnostics);
   }
   return result;
 }

@@ -6,6 +6,7 @@ const { URLSearchParams } = require('url')
 const { getAppConf } = require('../config')
 const genCheckToken = require('./checkToken')
 const Logger = require('../../../core/Logger')
+const { createUpstreamError } = require('../../../core/UpstreamDiagnostics')
 
 const logger = new Logger({ component: 'netease-request' })
 
@@ -154,6 +155,7 @@ const createXeapiRequest = async (uri, data, options) => {
 const createRequest = (uri, data, options) => {
   if (options.crypto === 'xeapi') return createXeapiRequest(uri, data, options)
   return new Promise((resolve, reject) => {
+    const startedAt = Date.now()
     const dataReq = { ...data }
     const headers = {
       'User-Agent': DEFAULT_UA
@@ -215,6 +217,12 @@ const createRequest = (uri, data, options) => {
         responseType: 'arraybuffer'
       })
     }
+    const context = { platform: 'netease', stage: uri, url, method: 'POST', startedAt }
+    const attachDiagnostics = (error) => {
+      answer.message = error.message
+      Object.defineProperty(answer, 'diagnostics', { value: error.diagnostics })
+      return answer
+    }
 
     //LOG_LEVEL=debug可查看详细请求内容
     logger.debug('NetEase EAPI request data', { dataReq })
@@ -268,17 +276,29 @@ const createRequest = (uri, data, options) => {
             answer.status = 200
           }
         } catch (e) {
+          if (uri.startsWith('/api/login/')) {
+            reject(attachDiagnostics(createUpstreamError('网易云登录返回无效响应', e, {
+              ...context, httpStatus: res.status, code: 'UPSTREAM_INVALID_RESPONSE',
+            })))
+            return
+          }
           answer.body = body
           answer.status = res.status
         }
         logger.debug('NetEase EAPI request Response', answer.body )
         if (answer.status === 200) resolve(answer)
-        else reject(answer)
+        else reject(attachDiagnostics(createUpstreamError(`网易云接口返回错误 (${answer.status})`, null, {
+          ...context, httpStatus: res.status, upstreamCode: answer.status, code: `NETEASE_${answer.status}`,
+        })))
       })
       .catch((err) => {
         answer.status = 502
-        answer.body = { code: 502, msg: err }
-        reject(answer)
+        const httpStatus = Number(err?.response?.status) || undefined
+        const error = createUpstreamError(`网易云请求失败${httpStatus ? ` (HTTP ${httpStatus})` : '，请稍后重试'}`, err, {
+          ...context, httpStatus, ...(httpStatus ? { code: `HTTP_${httpStatus}` } : {}),
+        })
+        answer.body = { code: 502, msg: error.message }
+        reject(attachDiagnostics(error))
       })
   })
 }

@@ -3,6 +3,7 @@
 // Protocol reference: NeteaseCloudMusicApiEnhanced captcha_sent / login_cellphone.
 const { randomUUID } = require('node:crypto');
 const { weapi } = require('./crypto');
+const { createUpstreamError } = require('../../../core/UpstreamDiagnostics');
 const sessions = new Map();
 const cooldowns = new Map();
 const TTL = 10 * 60 * 1000;
@@ -23,6 +24,7 @@ function readCookies(headers) {
 }
 
 async function loginRequest(path, data, cookies, stage) {
+  const context = { platform: 'netease', stage, url: `https://music.163.com/weapi/${path}`, method: 'POST', startedAt: Date.now(), timeoutMs: 20000 };
   let response;
   try {
     response = await fetch(`https://music.163.com/weapi/${path}`, {
@@ -34,16 +36,22 @@ async function loginRequest(path, data, cookies, stage) {
       },
       body: new URLSearchParams(weapi({ ...data, csrf_token: cookies.__csrf || '' })).toString(),
     });
-  } catch {
-    // Never include the phone, OTP, request body or Cookie in errors/logs.
-    throw new Error(`网易云${stage}请求失败，请稍后重试`);
+  } catch (error) {
+    throw createUpstreamError(`网易云${stage}请求失败，请稍后重试`, error, context);
   }
   if (!response.ok) {
-    await response.body?.cancel();
-    throw new Error(`网易云${stage}请求失败 (HTTP ${response.status})`);
+    await response.body?.cancel().catch(() => {});
+    throw createUpstreamError(`网易云${stage}请求失败 (HTTP ${response.status})`, null, {
+      ...context, httpStatus: response.status, code: `HTTP_${response.status}`,
+    });
   }
-  const body = await response.json().catch(() => null);
-  if (!body || typeof body.code !== 'number') throw new Error(`网易云${stage}返回无效响应`);
+  let body;
+  try { body = await response.json(); } catch (error) {
+    throw createUpstreamError(`网易云${stage}返回无效响应`, error, { ...context, httpStatus: response.status, code: 'UPSTREAM_INVALID_RESPONSE' });
+  }
+  if (!body || typeof body.code !== 'number') throw createUpstreamError(`网易云${stage}返回无效响应`, null, {
+    ...context, httpStatus: response.status, code: 'UPSTREAM_INVALID_RESPONSE',
+  });
   const received = readCookies(response.headers);
   Object.assign(cookies, received);
   if (body.code !== 200) {
@@ -51,7 +59,9 @@ async function loginRequest(path, data, cookies, stage) {
       400: '手机号或验证码无效', 501: '手机号尚未注册', 502: '登录凭证校验失败',
       503: '验证码错误或已过期', 405: '操作过于频繁，请稍后重试',
     };
-    throw new Error(`网易云${messages[body.code] || `${stage}失败，请尝试扫码或 Cookie 登录`} (${body.code})`);
+    throw createUpstreamError(`网易云${messages[body.code] || `${stage}失败，请尝试扫码或 Cookie 登录`} (${body.code})`, null, {
+      ...context, httpStatus: response.status, upstreamCode: body.code, code: `NETEASE_${body.code}`,
+    });
   }
   return { body, cookie: received };
 }

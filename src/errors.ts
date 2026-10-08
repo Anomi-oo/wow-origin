@@ -28,8 +28,13 @@ export class UnplayableError extends APIError {
 }
 
 export class UpstreamError extends APIError {
-  constructor(message: string) {
+  public readonly code?: string;
+  public readonly details?: unknown;
+
+  constructor(message: string, diagnostics?: { code?: string; details?: unknown }) {
     super(message, 502);
+    this.code = diagnostics?.code;
+    this.details = diagnostics?.details;
   }
 }
 

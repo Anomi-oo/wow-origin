@@ -1,5 +1,7 @@
 'use strict';
 
+const { createUpstreamError } = require('../../../core/UpstreamDiagnostics');
+
 // Native fetch keeps Set-Cookie separate in both Node and Workers.
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36';
 
@@ -27,6 +29,8 @@ function cookieHeader(cookies) {
 }
 
 async function loginFetch(url, options = {}, stage = '登录请求', browserHeaders = true) {
+  const startedAt = Date.now();
+  let httpStatus;
   try {
     const response = await fetch(url, {
       ...options,
@@ -37,13 +41,16 @@ async function loginFetch(url, options = {}, stage = '登录请求', browserHead
       signal: AbortSignal.timeout(20000),
     });
     if (response.status >= 400) {
-      await response.body?.cancel();
+      httpStatus = response.status;
+      await response.body?.cancel().catch(() => {});
       throw new Error(`HTTP ${response.status}`);
     }
     return response;
   } catch (error) {
-    // Fetch exceptions can contain credential-bearing URLs; only expose the stage.
-    throw new Error(`${stage}失败${/^HTTP \d+$/.test(error.message) ? ` (${error.message})` : '，请稍后重试'}`);
+    throw createUpstreamError(`${stage}失败${httpStatus ? ` (HTTP ${httpStatus})` : '，请稍后重试'}`, error, {
+      platform: 'qqmusic', stage, url, method: options.method || 'GET', startedAt, timeoutMs: 20000,
+      httpStatus, ...(httpStatus ? { code: `HTTP_${httpStatus}` } : {}),
+    });
   }
 }
 

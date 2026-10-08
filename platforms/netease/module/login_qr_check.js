@@ -3,25 +3,16 @@ module.exports = async (query, request) => {
     key: query.key,
     type: 3,
   }
-  try {
-    let result = await request(
-      `/api/login/qrcode/client/login`,
-      data,
-      { crypto: 'eapi', useCheckToken: false, MUSIC_U: '' },
-    )
-    result = {
-      status: 200,
-      body: {
-        ...result.body
-      },
-      cookie: result.cookie,
-    }
-    return result
-  } catch (error) {
-    return {
-      status: 200,
-      body: {},
-      cookie: {},
-    }
+  const result = await request(
+    `/api/login/qrcode/client/login`,
+    data,
+    { crypto: 'eapi', useCheckToken: false, MUSIC_U: '' },
+  )
+  return {
+    status: 200,
+    body: {
+      ...result.body
+    },
+    cookie: result.cookie,
   }
 }
