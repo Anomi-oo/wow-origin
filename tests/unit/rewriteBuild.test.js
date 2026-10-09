@@ -235,7 +235,12 @@ describe('universal rewrite build', () => {
       Authorization: 'Bearer quanx-test-key'
     }))
     expect(status.status).toBe('HTTP/1.1 200 OK')
-    expect(JSON.parse(status.body).data.capabilities).toContain('search')
+    const capabilities = JSON.parse(status.body).data.capabilities
+    expect(capabilities).toEqual(expect.arrayContaining([
+      'searchTracks', 'searchArtists', 'searchAlbums', 'searchPlaylists', 'searchSuggest', 'roamTracks'
+    ]))
+    expect(capabilities).not.toContain('search')
+    expect(capabilities).not.toContain('trackRoam')
   })
 
   test('同一脚本在 Loon persistentStore 环境返回 response 对象', async () => {

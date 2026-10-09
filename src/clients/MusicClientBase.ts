@@ -223,7 +223,7 @@ export abstract class MusicClientBase implements WowAdapter {
   abstract getRecommendedPlaylist(offset: number, limit: number): Promise<PlaylistPage>;
   abstract getPlaylistDetail(id: string, trackLimit?: number): Promise<PlaylistDetail>;
   abstract getDailyTracks(): Promise<Track[]>;
-  abstract getTrackRoam(): Promise<Track[]>;
+  abstract getRoamTracks(): Promise<Track[]>;
   abstract getTrackDetail(id: string): Promise<Track>;
   abstract getSimilarTracks(id: string): Promise<Track[]>;
   abstract getTrackUrl(id: string, quality?: string): Promise<TrackUrl>;

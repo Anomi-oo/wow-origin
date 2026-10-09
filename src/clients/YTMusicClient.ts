@@ -296,7 +296,7 @@ export class YTMusicClient implements WowAdapter {
     }).filter((track) => track.id && track.id !== id);
   }
 
-  async getTrackRoam(): Promise<Track[]> {
+  async getRoamTracks(): Promise<Track[]> {
     const tracks = await this.getDailyTracks();
     const seed = tracks[0] || (await this.getNewTracks())[0];
     return seed ? this.getSimilarTracks(seed.id) : [];

@@ -43,7 +43,7 @@
   },
   "dependencies": {
     "@noble/curves": "^2.4.0",
-    "aduoer-wow-sdk": "0.3.1",
+    "aduoer-wow-sdk": "0.3.2",
     "axios": "^1.18.1",
     "cookie-parser": "^1.4.7",
     "dotenv": "^17.4.2",

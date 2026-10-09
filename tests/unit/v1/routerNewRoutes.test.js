@@ -9,7 +9,7 @@ function createService(overrides = {}) {
     getToplist: jest.fn().mockResolvedValue([]),
     getToplistTracks: jest.fn().mockResolvedValue({ id: '26', name: '热歌榜', tracks: [] }),
     getNewTracks: jest.fn().mockResolvedValue([]),
-    getTrackRoam: jest.fn().mockResolvedValue([]),
+    getRoamTracks: jest.fn().mockResolvedValue([]),
     getTopArtists: jest.fn().mockResolvedValue([]),
     getArtistDetail: jest.fn().mockResolvedValue({ artist: { id: 'artist-1', name: '歌手' }, tracks: [] }),
     getArtistTracks: jest.fn().mockResolvedValue({ items: [], offset: 0, limit: 50, hasMore: false }),
@@ -125,7 +125,7 @@ describe('v1 新增路由', () => {
     const redirect = await request(app).get('/v1/track/fm').expect(308)
 
     expect(redirect.headers.location).toBe('/v1/track/roam')
-    expect(service.getTrackRoam).toHaveBeenCalledTimes(1)
+    expect(service.getRoamTracks).toHaveBeenCalledTimes(1)
   })
 
   test('艺人和专辑详情路由使用 query id，不再使用路径参数', async () => {
