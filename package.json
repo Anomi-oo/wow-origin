@@ -22,6 +22,11 @@
     "cloudflare:typecheck": "npm run cloudflare:prepare && tsc -p cloudflare/tsconfig.json",
     "cloudflare:dev": "wrangler dev",
     "cloudflare:deploy": "wrangler deploy",
+    "edgeone:prepare": "node edgeone/scripts/prepare.mjs",
+    "edgeone:build": "npm run edgeone:prepare && node edgeone/scripts/build.mjs",
+    "edgeone:typecheck": "npm run edgeone:prepare && tsc -p edgeone/tsconfig.json",
+    "edgeone:dev": "npm run edgeone:build && edgeone makers dev",
+    "edgeone:deploy": "npm run edgeone:build && edgeone makers deploy",
     "rewrite:build": "node rewrite/scripts/build.mjs",
     "rewrite:typecheck": "npm run rewrite:build && tsc -p rewrite/tsconfig.json",
     "deploy": "npm run cloudflare:deploy",
@@ -42,6 +47,7 @@
     "node": ">=22.0.0"
   },
   "dependencies": {
+    "@edgeone/pages-blob": "^0.0.18",
     "@noble/curves": "^2.4.0",
     "aduoer-wow-sdk": "0.3.5",
     "axios": "^1.18.1",

@@ -77,6 +77,7 @@ function browserEndpoint(req: Request): { ip: string; port: number } {
 export function createDashboardRouter(options: {
   registry?: AccountSessionRegistry;
   cloudflare?: boolean;
+  edgeone?: boolean;
   adminManagementPassword?: string;
   accountStore?: AccountStore;
   onAccountsChanged?: () => void;
@@ -156,7 +157,7 @@ export function createDashboardRouter(options: {
       const ips = lanAddresses.length > 0 ? lanAddresses : ['127.0.0.1'];
       const addresses: DashboardAddress[] = await Promise.all(ips.map(async (ip) => {
         const renderedIp = ip.includes(':') ? `[${ip}]` : ip;
-        const host = options.cloudflare
+        const host = options.cloudflare || options.edgeone
           ? `https://${req.headers.host || renderedIp}`
           : `http://${renderedIp}:${port}`;
         const { payload, addUrl } = createOriginAddPayload(host);
@@ -175,8 +176,8 @@ export function createDashboardRouter(options: {
         data: {
           status: 'running',
           adminManagementEnabled: enabled,
-          runtime: options.cloudflare ? 'cloudflare' : desktop ? 'desktop' : 'node',
-          accountLxSources: !options.cloudflare,
+          runtime: options.cloudflare ? 'cloudflare' : options.edgeone ? 'edgeone' : desktop ? 'desktop' : 'node',
+          accountLxSources: !options.cloudflare && !options.edgeone,
           port,
           preferredIp: addresses[0].ip,
           addresses

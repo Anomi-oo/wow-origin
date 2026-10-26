@@ -1,0 +1,25 @@
+{
+  "buildCommand": "npm run edgeone:build",
+  "installCommand": "npm install --include=dev",
+  "outputDirectory": "public",
+  "nodeVersion": "22.11.0",
+  "devCommand": "node edgeone/scripts/dev-server.mjs",
+  "cloudFunctions": {
+    "maxDuration": 120
+  },
+  "rewrites": [
+    {
+      "source": "/login",
+      "destination": "/index.html"
+    }
+  ],
+  "schedules": [
+    {
+      "name": "login-refresh",
+      "cron": "0 1 * * *",
+      "path": "/internal/cron/login-refresh",
+      "method": "POST",
+      "timezone": "Asia/Shanghai"
+    }
+  ]
+}
