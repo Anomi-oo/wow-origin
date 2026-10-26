@@ -12,6 +12,7 @@ npm test             # 运行所有测试
 npm run test:unit    # 仅单元测试
 npm run test:integration  # 仅集成测试
 npm run test:coverage     # 覆盖率报告
+npm run edgeone:build     # 生成 EdgeOne 云函数产物
 ```
 
 ### 环境配置
@@ -29,6 +30,7 @@ npm run test:coverage     # 覆盖率报告
 - 协议、响应 schema 与 OpenAPI 的唯一所有者是公开 `aduoer-wow-sdk`；`openapi.ts` 仅保留兼容导出
 - `/v1/status.data.version` 是当前安装的 SDK SemVer，不存在 `apiVersion`
 - 测试配置：`jest.config.js`，覆盖率阈值 50%
+- EdgeOne 部署：`edgeone/entry.ts` 是云函数入口，`edgeone.json` 定义构建与部署参数，`cloud-functions/README.md` 是平台识别云函数必需的占位文件
 
 ### 开发规范
 

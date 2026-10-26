@@ -15,22 +15,19 @@ import { qrCodeDataUrl } from './qr';
 import { preloadSessionFavorites } from './onload';
 import { YTMusicClient } from './clients/YTMusicClient';
 import { refreshLoginSession } from './loginRefresh';
+import {
+  createMemoryLoginStateStores,
+  type LoginMode,
+  type LoginStateStores,
+  type PendingLogin,
+  type PendingPhone,
+  PHONE_LOGIN_TTL_MS,
+  QR_LOGIN_TTL_MS
+} from './loginState';
 
 const { deviceIdFromIdentity } = require('../platforms/qqmusic/util/android-login');
 
 type ResourcePlatform = 'netease' | 'qqmusic';
-type LoginMode = 'create' | 'update';
-
-interface PendingLogin {
-  mode: LoginMode;
-  apiAccessKey: string;
-  platform: MusicPlatform;
-  createdAt: number;
-}
-
-interface PendingPhone extends PendingLogin {
-  captchaUrl?: string;
-}
 
 interface PlatformFactoryLike {
   getPlatform(name: ResourcePlatform): {
@@ -45,6 +42,19 @@ interface LoginRouterOptions {
   accountStore?: AccountStoreInput;
   allowAccountLxSources?: boolean;
   onAccountsChanged?: () => void;
+  loginStateStores?: LoginStateStores;
+  loginPageHtml?: string;
+}
+
+/** 登录 token 会作为 Blob key 的一部分，限制为短 ASCII 可打印字符。 */
+function isValidLoginToken(value: string): boolean {
+  return /^[\x21-\x7E]{1,256}$/.test(value) && encodeURIComponent(value).length <= 500;
+}
+
+function requireLoginToken(value: unknown, message: string): string {
+  const token = String(value || '').trim();
+  if (!isValidLoginToken(token)) throw new BadRequestError(message);
+  return token;
 }
 
 function normalizeLoginPlatform(value: unknown): MusicPlatform {
@@ -145,10 +155,16 @@ function existingQqDeviceQuery(session?: MusicAccountSession): Record<string, st
   return { qq_android_identity: session.deviceState! };
 }
 
-function sendLoginPage(_req: Request, res: Response): void {
-  res.type('html').set('Cache-Control', 'no-store').sendFile(
-    path.join(__dirname, '..', 'public', 'index.html')
-  );
+function sendLoginPage(loginPageHtml?: string) {
+  return (_req: Request, res: Response): void => {
+    res.type('html').set('Cache-Control', 'no-store');
+    if (loginPageHtml !== undefined) {
+      res.send(loginPageHtml);
+      return;
+    }
+    // 工作目录本身可能包含以点开头的路径段（例如 .paseo），需显式允许。
+    res.sendFile(path.join(__dirname, '..', 'public', 'index.html'), { dotfiles: 'allow' });
+  };
 }
 
 async function resolveLoggedInAccountName(
@@ -244,25 +260,33 @@ export function createLoginRouter({
   workDir,
   accountStore,
   allowAccountLxSources = true,
-  onAccountsChanged
+  onAccountsChanged,
+  loginStateStores = createMemoryLoginStateStores(),
+  loginPageHtml
 }: LoginRouterOptions): Router {
   const router = express.Router();
-  const pendingLogins = new Map<string, PendingLogin>();
-  const pendingPhones = new Map<string, PendingPhone>();
+  const pendingLogins = loginStateStores.qr;
+  const pendingPhones = loginStateStores.phone;
   const checking = new Set<string>();
   const storage = accountStore ?? workDir;
   (registry.onDeleted ??= new Set()).add((session) => {
-    for (const pendingMap of [pendingLogins, pendingPhones]) {
-      for (const [token, pending] of pendingMap) {
-        if (pending.apiAccessKey === session.apiAccessKey) {
+    // onDeleted 是同步回调，远端 Store 的清理放到后台执行。
+    void (async () => {
+      for (const store of [pendingLogins, pendingPhones]) {
+        const entries = await store.entries?.() ?? [];
+        for (const [token, pending] of entries) {
+          if (pending.apiAccessKey !== session.apiAccessKey) continue;
           if (pending.platform === 'qq') {
             require('../platforms/qqmusic/util/qq-login').cancelLogin(token);
             require('../platforms/qqmusic/util/phone-login').cancelPhoneLogin(token);
           }
-          pendingMap.delete(token); checking.delete(token);
+          await store.delete(token);
+          checking.delete(token);
         }
       }
-    }
+    })().catch((error) => {
+      console.warn('[login] 清理已删除账号的登录会话失败', error);
+    });
   });
 
   function loginTarget(body: any): PendingLogin {
@@ -301,21 +325,23 @@ export function createLoginRouter({
 
   router.use((_req, res, next) => {
     res.set('Cache-Control', 'no-store');
-    const now = Date.now();
-    for (const [token, pending] of pendingLogins) if (now - pending.createdAt > 180000) pendingLogins.delete(token);
-    for (const [token, pending] of pendingPhones) if (now - pending.createdAt > 600000) pendingPhones.delete(token);
+    if (loginStateStores.cleanup) {
+      void Promise.resolve(loginStateStores.cleanup()).catch(() => undefined);
+    }
     next();
   });
 
-  function getPendingLogin(token: unknown): { token: string; pending: PendingLogin } {
-    const normalizedToken = String(token || '').trim();
-    if (!normalizedToken) throw new BadRequestError('token 是必填参数');
-    const pending = pendingLogins.get(normalizedToken);
-    if (!pending) throw new BadRequestError('登录二维码不存在或已失效');
+  async function getPendingLogin(token: unknown): Promise<{ token: string; pending: PendingLogin }> {
+    const normalizedToken = requireLoginToken(token, 'token 是必填参数');
+    const pending = await pendingLogins.get(normalizedToken);
+    if (!pending || Date.now() - pending.createdAt > QR_LOGIN_TTL_MS) {
+      if (pending) await pendingLogins.delete(normalizedToken).catch(() => undefined);
+      throw new BadRequestError('登录二维码不存在或已失效');
+    }
     return { token: normalizedToken, pending };
   }
 
-  router.get('/', sendLoginPage);
+  router.get('/', sendLoginPage(loginPageHtml));
 
   router.post('/api/verify-key', (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -363,7 +389,8 @@ export function createLoginRouter({
       const qrImage = qr.qrImage || (qr.qrText
         ? qrCodeDataUrl(qr.qrText)
         : '');
-      pendingLogins.set(qr.token, { mode, apiAccessKey, platform, createdAt: Date.now() });
+      if (!isValidLoginToken(qr.token)) throw new UpstreamError('登录接口返回了无效的 token');
+      await pendingLogins.set(qr.token, { mode, apiAccessKey, platform, createdAt: Date.now() });
       res.json({
         code: 200,
         data: { mode, platform, apiAccessKey, token: qr.token, qrImage, qrText: qr.qrText }
@@ -376,7 +403,7 @@ export function createLoginRouter({
   router.post('/api/check', async (req: Request, res: Response, next: NextFunction) => {
     let activeToken = '';
     try {
-      const { token, pending } = getPendingLogin(req.body?.token);
+      const { token, pending } = await getPendingLogin(req.body?.token);
       if (checking.has(token)) {
         res.json({ code: 200, data: { status: 'confirming', message: '登录确认中' } });
         return;
@@ -392,13 +419,17 @@ export function createLoginRouter({
       if (code === 803) {
         const cookie = serializeCookie(result.cookie);
         const data = await saveLogin(pending, cookie);
-        pendingLogins.delete(token);
+        await pendingLogins.delete(token).catch((error) => {
+          console.warn('[login] 清理已完成的扫码会话失败', error);
+        });
         res.json({ code: 200, data });
         return;
       }
 
       const status = code === 800 ? 'expired' : code === 802 ? 'confirming' : code === 801 ? 'waiting' : 'error';
-      if (status === 'expired' || status === 'error') pendingLogins.delete(token);
+      if (status === 'expired' || status === 'error') {
+        await pendingLogins.delete(token).catch(() => undefined);
+      }
       res.json({
         code: 200,
         data: {
@@ -442,8 +473,11 @@ export function createLoginRouter({
       if (!/^\d{6,15}$/.test(phone) || !/^[1-9]\d{0,3}$/.test(countryCode)) throw new BadRequestError('请输入有效的手机号和区号');
       const token = String(req.body?.token || '');
       if (token) {
-        const previous = pendingPhones.get(token);
-        if (!previous || previous.platform !== target.platform || previous.mode !== target.mode || (target.mode === 'update' && previous.apiAccessKey !== target.apiAccessKey)) {
+        requireLoginToken(token, '手机登录会话已失效，请重新获取验证码');
+        const previous = await pendingPhones.get(token);
+        if (!previous || Date.now() - previous.createdAt > PHONE_LOGIN_TTL_MS
+          || previous.platform !== target.platform || previous.mode !== target.mode
+          || (target.mode === 'update' && previous.apiAccessKey !== target.apiAccessKey)) {
           throw new BadRequestError('手机登录会话已失效，请重新获取验证码');
         }
         target = previous;
@@ -461,7 +495,10 @@ export function createLoginRouter({
       if (data.status === 'captcha' && (target.platform !== 'qq' || !sessionToken)) {
         throw new UpstreamError('QQ 安全验证会话无效');
       }
-      if (sessionToken) pendingPhones.set(sessionToken, { ...target, captchaUrl });
+      if (sessionToken) {
+        if (!isValidLoginToken(sessionToken)) throw new UpstreamError('手机登录接口返回了无效的 token');
+        await pendingPhones.set(sessionToken, { ...target, captchaUrl });
+      }
       const responseData = { ...data, token: sessionToken || data.token };
       delete responseData.securityUrl;
       if (captchaUrl) responseData.securityPath = `/login/api/phone/captcha?token=${encodeURIComponent(sessionToken)}`;
@@ -471,9 +508,10 @@ export function createLoginRouter({
 
   router.get('/api/phone/captcha', async (req, res, next) => {
     try {
-      const token = String(req.query?.token || '').trim();
-      const pending = pendingPhones.get(token);
-      if (!token || !pending?.captchaUrl || pending.platform !== 'qq') {
+      const token = requireLoginToken(req.query?.token, 'QQ 安全验证会话不存在或已失效');
+      const pending = await pendingPhones.get(token);
+      if (!pending?.captchaUrl || pending.platform !== 'qq'
+        || Date.now() - pending.createdAt > PHONE_LOGIN_TTL_MS) {
         throw new BadRequestError('QQ 安全验证会话不存在或已失效');
       }
       const captchaUrl = normalizeQqCaptchaUrl(pending.captchaUrl);
@@ -520,11 +558,14 @@ export function createLoginRouter({
   });
 
   router.post('/api/phone/check', async (req, res, next) => {
-    const token = String(req.body?.token || '');
+    let token = '';
     let active = false;
     try {
-      const pending = pendingPhones.get(token);
-      if (!pending) throw new BadRequestError('手机登录会话已失效，请重新获取验证码');
+      token = requireLoginToken(req.body?.token, '手机登录会话已失效，请重新获取验证码');
+      const pending = await pendingPhones.get(token);
+      if (!pending || Date.now() - pending.createdAt > PHONE_LOGIN_TTL_MS) {
+        throw new BadRequestError('手机登录会话已失效，请重新获取验证码');
+      }
       if (req.body?.platform !== undefined && normalizeLoginPlatform(req.body.platform) !== pending.platform) {
         throw new BadRequestError('平台与手机登录会话不匹配');
       }
@@ -539,7 +580,9 @@ export function createLoginRouter({
       active = true;
       const result = await callLoginModule(platformFactory, pending.platform, 'login/phone/check', { token, code });
       const data = await saveLogin(pending, serializeCookie(result.cookie), result.body?.nickname);
-      pendingPhones.delete(token);
+      await pendingPhones.delete(token).catch((error) => {
+        console.warn('[login] 清理已完成的手机登录会话失败', error);
+      });
       res.json({ code: 200, data });
     } catch (error) { next(error); }
     finally { if (active) checking.delete(token); }

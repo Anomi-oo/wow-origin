@@ -6,6 +6,12 @@ data/*
 !data/accounts.example.json
 cloudflare/generated/*
 !cloudflare/generated/lx-source.d.ts
+edgeone/generated/*
+# Makers CLI 在生成构建计划时检查 cloud-functions/ 是否非空，决定是否打包 Node 云函数。
+# 目录里只保留 README.md 占位，真正的函数产物由 npm run edgeone:build 生成。
+cloud-functions/*
+!cloud-functions/README.md
+.edgeone/
 .wrangler/
 rewrite/generated/
 rewrite/dist/

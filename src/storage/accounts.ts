@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { DatabaseSync, type StatementSync } from 'node:sqlite';
+import type { DatabaseSync, StatementSync } from 'node:sqlite';
 import type { RawMusicAccount } from '../accounts';
 
 export interface AccountStore {
@@ -9,6 +9,10 @@ export interface AccountStore {
   insert(account: RawMusicAccount): void;
   delete(apiAccessKey: string): void;
   update(apiAccessKey: string, changes: Partial<RawMusicAccount>): void;
+  /** 持久化缓冲的写入，由异步写入的存储实现。 */
+  flush?(): Promise<void>;
+  /** 重新读取底层存储；数据没有变化时返回 false。 */
+  reload?(): Promise<boolean | void>;
 }
 
 type StoredAccountRow = {
@@ -113,7 +117,10 @@ export class SqliteAccountStore implements AccountStore {
     this.location = sqliteAccountsFilePath(workDir);
     fs.mkdirSync(path.dirname(this.location), { recursive: true });
     migrateLegacySqliteFile(workDir, this.location);
-    this.database = new DatabaseSync(this.location);
+    // Load lazily so bundlers targeting runtimes without node:sqlite can still
+    // import this module when a different AccountStore is supplied.
+    const { DatabaseSync: SqliteDatabase } = require('node:sqlite') as typeof import('node:sqlite');
+    this.database = new SqliteDatabase(this.location);
     this.database.exec('PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;');
     this.database.exec(SCHEMA);
     const columns = this.database.prepare('PRAGMA table_info(accounts)').all() as Array<{ name: string }>;
