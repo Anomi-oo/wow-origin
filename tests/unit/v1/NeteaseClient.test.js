@@ -1,4 +1,20 @@
 const { NeteaseClient } = require('../../../dist/clients/NeteaseClient')
+const express = require('express')
+const request = require('supertest')
+const { createWowRouter } = require('aduoer-wow-sdk')
+
+function createTrackUrlApp(client) {
+  const app = express()
+  app.use(createWowRouter({
+    resolveContext: async () => ({
+      adapter: client,
+      stateless: false,
+      qualityMap: [{ key: 'master', label: '超清母带' }]
+    }),
+    validateResponses: false
+  }))
+  return app
+}
 
 describe('NeteaseClient', () => {
   beforeEach(() => {
@@ -85,6 +101,32 @@ describe('NeteaseClient', () => {
     }))
     expect(callModule).not.toHaveBeenCalledWith('lyric', expect.anything())
     expect(callModule).not.toHaveBeenCalledWith('lyric/new', expect.anything())
+  })
+
+  test('v1 接口对 QQ 歌曲 MID 返回明确的 400 响应', async () => {
+    const callModule = jest.fn()
+    global.__musicPlatformFactory__.getPlatform.mockReturnValue({ callModule })
+
+    const response = await request(createTrackUrlApp(new NeteaseClient('')))
+      .get('/v1/track/url?id=002DONNN2RB5K6&quality=master')
+      .expect(400)
+
+    expect(response.body).toEqual({ code: 400, message: '网易云歌曲 ID 必须为数字', data: null })
+    expect(callModule).not.toHaveBeenCalled()
+  })
+
+  test('v1 接口对网易音频上游异常返回 502 响应', async () => {
+    const callModule = jest.fn().mockResolvedValue({
+      code: 500,
+      message: 'Unexpected non-whitespace character after JSON'
+    })
+    global.__musicPlatformFactory__.getPlatform.mockReturnValue({ callModule })
+
+    const response = await request(createTrackUrlApp(new NeteaseClient('')))
+      .get('/v1/track/url?id=33418857&quality=master')
+      .expect(502)
+
+    expect(response.body).toEqual({ code: 502, message: '获取歌曲链接失败', data: null })
   })
 
   test('高音质请求返回其他音质时直接使用该链接和实际音质', async () => {

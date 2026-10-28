@@ -1,7 +1,7 @@
 import type { Album, AlbumDetail, AlbumPage, Artist, ArtistDetail, ArtistPage, Playlist, PlaylistCategory, PlaylistDetail, PlaylistPage, SearchSuggest, ToplistGroup, Track, TrackLyrics, TrackPage, TrackUrl, UserProfile } from 'aduoer-wow-sdk';
 import { mapAlbum, mapAlbumDetail, mapArtist, mapArtistDetail, mapPlaylist, mapSearchSuggest, mapTrack, mapTrackLyrics, mapTrackUrl, mapUserDetail } from '../mappers/netease';
 import { MusicClientBase } from './MusicClientBase';
-import { NotFoundError, UnplayableError } from '../errors';
+import { APIError, BadRequestError, NotFoundError, UnplayableError, UpstreamError } from '../errors';
 import { getNeteasePlaylistCategoryMap } from '../playlistCategories';
 import { resolveTrackUrlWithFallback } from '../trackUrl';
 
@@ -131,11 +131,18 @@ export class NeteaseClient extends MusicClientBase {
   }
 
   async getTrackUrl(id: string, quality?: string): Promise<TrackUrl> {
+    if (!/^\d+$/.test(id)) throw new BadRequestError('网易云歌曲 ID 必须为数字');
     return resolveTrackUrlWithFallback('netease', quality, () => this.getTrackDetail(id), (candidate) => this.getTrackUrlForQuality(id, candidate));
   }
 
   async getTrackUrlForQuality(id: string, quality: string): Promise<TrackUrl> {
-    const raw = await this.call('song_url_xeapi', { id, level: quality });
+    let raw: any;
+    try {
+      raw = await this.call('song_url_xeapi', { id, level: quality });
+    } catch (error) {
+      if (error instanceof APIError) throw error;
+      throw new UpstreamError('获取歌曲链接失败');
+    }
     const audio = [raw?.data, raw?.body?.data, raw?.songs, raw]
       .flatMap((candidate) => Array.isArray(candidate) ? candidate : [candidate])
       .find((item) => item?.url);

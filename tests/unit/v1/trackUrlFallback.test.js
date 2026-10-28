@@ -9,6 +9,7 @@ describe.each([
 ])('%s 歌曲音质降级', (_label, Client, urlRoute, highQuality, intermediateQuality) => {
   let callModule
   let client
+  const trackId = Client === NeteaseClient ? '123' : 'track'
 
   function setup(available, playable, { errors = [], detailError, invalid = [] } = {}) {
     callModule = jest.fn(async (route, { query }) => {
@@ -23,8 +24,8 @@ describe.each([
       if (route === 'song/music/detail') return { code: 200, data: {} }
       if (route === 'song/detail') {
         const track = Client === QQClient
-          ? { mid: 'track', qualities: available.map((key) => ({ key, label: key, size: 100 })) }
-          : { id: 'track', ...Object.fromEntries(available.map((key) => [neteaseFields[key] || key, { size: 100 }])) }
+          ? { mid: trackId, qualities: available.map((key) => ({ key, label: key, size: 100 })) }
+          : { id: trackId, ...Object.fromEntries(available.map((key) => [neteaseFields[key] || key, { size: 100 }])) }
         return { code: 200, songs: [track] }
       }
       throw new Error(`unexpected route: ${route}`)
@@ -40,14 +41,14 @@ describe.each([
 
   test('请求成功时不额外获取详情', async () => {
     setup([], ['lossless'])
-    await expect(client.getTrackUrl('track', 'lossless')).resolves.toMatchObject({ quality: 'lossless' })
+    await expect(client.getTrackUrl(trackId, 'lossless')).resolves.toMatchObject({ quality: 'lossless' })
     expect(urlQualities()).toEqual(['lossless'])
     expect(detailCalls()).toHaveLength(0)
   })
 
   test('高音质失败后选择歌曲中最近的中间档位，跳过不存在的 SQ', async () => {
     setup(['standard', 'exhigh', intermediateQuality], [intermediateQuality], { errors: [highQuality] })
-    await expect(client.getTrackUrl('track', highQuality)).resolves.toMatchObject({ quality: intermediateQuality })
+    await expect(client.getTrackUrl(trackId, highQuality)).resolves.toMatchObject({ quality: intermediateQuality })
     expect(urlQualities()).toEqual([highQuality, intermediateQuality])
     expect(callModule.mock.calls[1][0]).toBe('song/detail')
     expect(detailCalls()).toHaveLength(1)
@@ -55,14 +56,14 @@ describe.each([
 
   test('SQ 失败后只向下降至 HQ，不选择更高音质', async () => {
     setup(['master', intermediateQuality, 'standard', 'exhigh', 'lossless'], ['master', intermediateQuality, 'exhigh'])
-    await expect(client.getTrackUrl('track', 'lossless')).resolves.toMatchObject({ quality: 'exhigh' })
+    await expect(client.getTrackUrl(trackId, 'lossless')).resolves.toMatchObject({ quality: 'exhigh' })
     expect(urlQualities()).toEqual(['lossless', 'exhigh'])
     expect(detailCalls()).toHaveLength(1)
   })
 
   test('多次失败时逐档下降，整个流程只获取一次详情', async () => {
     setup(['standard', intermediateQuality, 'exhigh'], ['standard'], { errors: [intermediateQuality] })
-    await expect(client.getTrackUrl('track', highQuality)).resolves.toMatchObject({ quality: 'standard' })
+    await expect(client.getTrackUrl(trackId, highQuality)).resolves.toMatchObject({ quality: 'standard' })
     expect(urlQualities()).toEqual([highQuality, intermediateQuality, 'exhigh', 'standard'])
     expect(detailCalls()).toHaveLength(1)
     if (Client === NeteaseClient) expect(callModule.mock.calls.filter(([route]) => route === 'song/music/detail')).toHaveLength(1)
@@ -70,40 +71,44 @@ describe.each([
 
   test.each(['min', 'standard'])('%s 失败后不能向上选择', async (quality) => {
     setup(['master', 'lossless', 'exhigh'], ['master', 'lossless', 'exhigh'])
-    await expect(client.getTrackUrl('track', quality)).rejects.toThrow('Song has no playable audio URL')
+    await expect(client.getTrackUrl(trackId, quality)).rejects.toThrow('Song has no playable audio URL')
     expect(urlQualities()).toEqual(['standard'])
     expect(detailCalls()).toHaveLength(1)
   })
 
   test.each([undefined, 'max'])('自动音质 %s 失败后同样遵循歌曲音质表', async (quality) => {
     setup(['standard'], ['standard'])
-    await expect(client.getTrackUrl('track', quality)).resolves.toMatchObject({ quality: 'standard' })
+    await expect(client.getTrackUrl(trackId, quality)).resolves.toMatchObject({ quality: 'standard' })
     expect(urlQualities()).toEqual([quality === 'max' ? 'master' : 'exhigh', 'standard'])
     expect(detailCalls()).toHaveLength(1)
   })
 
-  test('详情查询失败时保留原始音频错误，不盲目尝试 SQ', async () => {
+  test('详情查询失败时停止降级，并报告最初的请求失败', async () => {
     setup([], [], { errors: [highQuality], detailError: new Error('detail unavailable') })
-    await expect(client.getTrackUrl('track', highQuality)).rejects.toThrow(`failed ${highQuality}`)
+    await expect(client.getTrackUrl(trackId, highQuality)).rejects.toThrow(
+      Client === NeteaseClient ? '获取歌曲链接失败' : `failed ${highQuality}`
+    )
     expect(urlQualities()).toEqual([highQuality])
     expect(detailCalls()).toHaveLength(1)
   })
 
   test.each([[[]], [['master']]])('没有更低可用档位时停止降级：%j', async (available) => {
     setup(available, ['master'])
-    await expect(client.getTrackUrl('track', 'lossless')).rejects.toThrow('Song has no playable audio URL')
+    await expect(client.getTrackUrl(trackId, 'lossless')).rejects.toThrow('Song has no playable audio URL')
     expect(urlQualities()).toEqual(['lossless'])
   })
 
   test('无效播放链接也触发按歌曲音质表降级', async () => {
     setup(['exhigh'], ['exhigh'], { invalid: ['lossless'] })
-    await expect(client.getTrackUrl('track', 'lossless')).resolves.toMatchObject({ quality: 'exhigh' })
+    await expect(client.getTrackUrl(trackId, 'lossless')).resolves.toMatchObject({ quality: 'exhigh' })
     expect(urlQualities()).toEqual(['lossless', 'exhigh'])
   })
 
-  test('所有低档位都失败时停止并保留原始错误', async () => {
+  test('所有低档位都失败时停止并报告请求失败', async () => {
     setup(['standard', 'exhigh'], [], { errors: ['lossless'] })
-    await expect(client.getTrackUrl('track', 'lossless')).rejects.toThrow('failed lossless')
+    await expect(client.getTrackUrl(trackId, 'lossless')).rejects.toThrow(
+      Client === NeteaseClient ? '获取歌曲链接失败' : 'failed lossless'
+    )
     expect(urlQualities()).toEqual(['lossless', 'exhigh', 'standard'])
     expect(detailCalls()).toHaveLength(1)
   })

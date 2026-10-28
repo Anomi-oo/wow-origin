@@ -76,8 +76,8 @@ describe('Wow adapter', () => {
       favoriteTrackIds: new Set()
     }, lxResolver)
 
-    await expect(adapter.getTrackUrl('track-1', 'exhigh')).resolves.toEqual(lxTrackUrl)
-    expect(lxResolver.resolveTrackUrl).toHaveBeenCalledWith('netease', 'track-1', 'exhigh', [], { allowFallback: false })
+    await expect(adapter.getTrackUrl('123', 'exhigh')).resolves.toEqual(lxTrackUrl)
+    expect(lxResolver.resolveTrackUrl).toHaveBeenCalledWith('netease', '123', 'exhigh', [], { allowFallback: false })
     expect(officialSpy).not.toHaveBeenCalled()
   })
 
@@ -122,8 +122,8 @@ describe('Wow adapter', () => {
       useLuoxue: true, favoriteTrackIds: new Set()
     }, lxResolver)
 
-    await expect(adapter.getTrackUrl('track-1', 'jyeffect')).resolves.toEqual(officialTrackUrl)
-    expect(officialSpy).toHaveBeenCalledWith('track-1', 'jyeffect')
+    await expect(adapter.getTrackUrl('123', 'jyeffect')).resolves.toEqual(officialTrackUrl)
+    expect(officialSpy).toHaveBeenCalledWith('123', 'jyeffect')
     expect(lxResolver.resolveTrackUrl).not.toHaveBeenCalled()
   })
 
@@ -162,13 +162,14 @@ describe('Wow adapter', () => {
     ['qq', QQClient, 'lossless', 'exhigh']
   ])('%s 两种来源都失败后按歌曲音质表降级，并再次尝试洛雪源', async (platform, Client, requested, lower) => {
     const events = []
+    const trackId = platform === 'netease' ? '123' : 'track-1'
     const officialSpy = jest.spyOn(Client.prototype, 'getTrackUrlForQuality').mockImplementation(async (_id, quality) => {
       events.push(`official:${quality}`)
       throw new Error('official unavailable')
     })
     const detailSpy = jest.spyOn(Client.prototype, 'getTrackDetail').mockImplementation(async () => {
       events.push('detail')
-      return { id: 'track-1', qualities: [{ key: 'master' }, { key: lower }, { key: 'standard' }] }
+      return { id: trackId, qualities: [{ key: 'master' }, { key: lower }, { key: 'standard' }] }
     })
     const lxTrackUrl = { url: `https://audio.test/${lower}`, quality: lower, format: '', bitrate: null, size: 0 }
     const lxResolver = { resolveTrackUrl: jest.fn(async (_platform, _id, quality) => {
@@ -178,13 +179,13 @@ describe('Wow adapter', () => {
     const accountSources = ['https://source.test/account.js']
     const adapter = createAdapter({ platform, cookie: '', lxSource: accountSources, favoriteTrackIds: new Set() }, lxResolver)
 
-    await expect(adapter.getTrackUrl('track-1', requested)).resolves.toEqual(lxTrackUrl)
+    await expect(adapter.getTrackUrl(trackId, requested)).resolves.toEqual(lxTrackUrl)
     expect(events).toEqual([`lx:${requested}`, `official:${requested}`, 'detail', `lx:${lower}`])
     expect(detailSpy).toHaveBeenCalledTimes(1)
     expect(officialSpy).toHaveBeenCalledTimes(1)
     expect(lxResolver.resolveTrackUrl.mock.calls).toEqual([
-      [platform, 'track-1', requested, accountSources, { allowFallback: false }],
-      [platform, 'track-1', lower, accountSources, { allowFallback: false }]
+      [platform, trackId, requested, accountSources, { allowFallback: false }],
+      [platform, trackId, lower, accountSources, { allowFallback: false }]
     ])
   })
 
@@ -340,8 +341,8 @@ describe('Wow adapter', () => {
       favoriteTrackIds: new Set()
     }, lxResolver)
 
-    await expect(adapter.getTrackUrl('track-1', 'standard')).resolves.toEqual(officialTrackUrl)
-    expect(officialSpy).toHaveBeenCalledWith('track-1', 'standard')
+    await expect(adapter.getTrackUrl('123', 'standard')).resolves.toEqual(officialTrackUrl)
+    expect(officialSpy).toHaveBeenCalledWith('123', 'standard')
     expect(lxResolver.resolveTrackUrl).not.toHaveBeenCalled()
   })
 
