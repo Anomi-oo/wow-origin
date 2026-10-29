@@ -353,6 +353,14 @@ export class NeteaseClient extends MusicClientBase {
     return { success: raw.code === undefined || Number(raw.code) === 200 };
   }
 
+  /** 上游支持逗号分隔的歌曲列表；请求级错误继续由 HTTP 错误处理。 */
+  async addTracksToPlaylist(playlistId: string, trackIds: string[]): Promise<{ id: string }[]> {
+    if (!trackIds.length) return [];
+    const raw = await this.call('playlist_tracks', { pid: playlistId, tracks: trackIds.join(','), op: 'add' });
+    if (raw.code !== undefined && Number(raw.code) !== 200) throw new UpstreamError('网易云音乐添加歌曲失败');
+    return [];
+  }
+
   async removeTrack(playlistId: string, trackId: string): Promise<{ success: boolean }> {
     const raw = await this.call('playlist_tracks', { pid: playlistId, tracks: trackId, op: 'del' });
     return { success: raw.code === undefined || Number(raw.code) === 200 };

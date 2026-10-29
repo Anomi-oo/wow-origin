@@ -48,7 +48,7 @@ export class YTMusicClient implements WowAdapter {
 
   constructor(
     private readonly cookie: string,
-    private readonly favoriteTracks = new Set<string>(),
+    private readonly favoriteTrackIDs = new Set<string>(),
     private readonly favoriteArtists = new Set<string>(),
     private readonly favoriteAlbums = new Set<string>(),
     private readonly savedPlaylists = new Set<string>()
@@ -62,7 +62,7 @@ export class YTMusicClient implements WowAdapter {
     if (!this.cookie) throw new BadRequestError('此操作需要 YouTube Music 浏览器 Cookie');
   }
 
-  private withTrack(track: Track): Track { return { ...track, favorite: this.favoriteTracks.has(track.id) || track.favorite }; }
+  private withTrack(track: Track): Track { return { ...track, favorite: this.favoriteTrackIDs.has(track.id) || track.favorite }; }
   private withArtist(artist: Artist): Artist { return { ...artist, favorite: this.favoriteArtists.has(artist.id) }; }
   private withAlbum(album: Album): Album { return { ...album, favorite: this.favoriteAlbums.has(album.id) }; }
 
@@ -383,7 +383,7 @@ export class YTMusicClient implements WowAdapter {
     this.requireLogin();
     const { items } = await this.browseRows('VLLM', 1000);
     const tracks = items.map(mapTrack).filter((track) => track.id);
-    this.favoriteTracks.clear(); tracks.forEach((track) => this.favoriteTracks.add(track.id));
+    this.favoriteTrackIDs.clear(); tracks.forEach((track) => this.favoriteTrackIDs.add(track.id));
     return tracks.map((track) => this.withTrack(track));
   }
 
@@ -420,7 +420,7 @@ export class YTMusicClient implements WowAdapter {
     this.requireLogin();
     const response = await this.api.request(status ? 'like/like' : 'like/removelike', { target: { videoId: id } });
     if (!succeeded(response)) throw new UpstreamError('YouTube Music 收藏歌曲失败');
-    if (status) this.favoriteTracks.add(id); else this.favoriteTracks.delete(id);
+    if (status) this.favoriteTrackIDs.add(id); else this.favoriteTrackIDs.delete(id);
     return { success: true, status };
   }
 
@@ -486,6 +486,16 @@ export class YTMusicClient implements WowAdapter {
     });
     if (!succeeded(response)) throw new UpstreamError('YouTube Music 添加歌曲失败');
     return { success: true };
+  }
+
+  async addTracksToPlaylist(playlistId: string, trackIds: string[]): Promise<{ id: string }[]> {
+    this.requireLogin();
+    if (!trackIds.length) return [];
+    const response = await this.api.request('browse/edit_playlist', {
+      playlistId, actions: trackIds.map((id) => ({ action: 'ACTION_ADD_VIDEO', addedVideoId: id }))
+    });
+    if (!succeeded(response)) throw new UpstreamError('YouTube Music 添加歌曲失败');
+    return [];
   }
 
   async removeTrack(playlistId: string, trackId: string): Promise<{ success: boolean }> {

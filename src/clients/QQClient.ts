@@ -1,7 +1,7 @@
 import type { Album, AlbumDetail, AlbumPage, Artist, ArtistDetail, ArtistPage, Playlist, PlaylistCategory, PlaylistDetail, PlaylistPage, SearchSuggest, ToplistGroup, Track, TrackLyrics, TrackPage, TrackUrl, UserProfile } from 'aduoer-wow-sdk';
 import { mapAlbum, mapAlbumDetail, mapArtist, mapArtistDetail, mapPlaylist, mapSearchSuggest, mapTrack, mapTrackLyrics, mapTrackUrl, mapUserDetail } from '../mappers/qq';
 import { MusicClientBase } from './MusicClientBase';
-import { NotFoundError, UnplayableError } from '../errors';
+import { NotFoundError, UnplayableError, UpstreamError } from '../errors';
 import { getQQPlaylistCategoryEntries, getQQPlaylistCategoryMap } from '../playlistCategories';
 import { resolveTrackUrlWithFallback } from '../trackUrl';
 
@@ -345,6 +345,20 @@ export class QQClient extends MusicClientBase {
     });
   }
 
+  /** 无法解析的歌曲单独返回失败，其余歌曲一次提交到上游收藏接口。 */
+  async favoriteTracks(ids: string[], status: boolean): Promise<{ id: string }[]> {
+    const { songs, failures } = await this.writableSongs(ids);
+    if (!songs.length) return failures;
+    const result = await this.call('like', {
+      ids: songs.map((song) => song.songId).join(','), like: status ? 'true' : 'false', loginType: this.qqLoginType
+    });
+    if (result?.success !== true) throw new UpstreamError('QQ 音乐收藏歌曲失败');
+    for (const { id } of songs) {
+      if (status) this.addFavoriteTrack(id); else this.removeFavoriteTrack(id);
+    }
+    return failures;
+  }
+
   async deletePlaylist(id: string): Promise<{ success: boolean }> {
     await this.call('playlist_delete', { id });
     return { success: true };
@@ -360,6 +374,14 @@ export class QQClient extends MusicClientBase {
     const songId = await this.resolveWritableSongId(trackId);
     await this.call('playlist_tracks', { pid: playlistId, tracks: String(songId), op: 'add' });
     return { success: true };
+  }
+
+  async addTracksToPlaylist(playlistId: string, trackIds: string[]): Promise<{ id: string }[]> {
+    const { songs, failures } = await this.writableSongs(trackIds);
+    if (songs.length) {
+      await this.call('playlist_tracks', { pid: playlistId, tracks: songs.map((song) => song.songId).join(','), op: 'add' });
+    }
+    return failures;
   }
 
   async removeTrack(playlistId: string, trackId: string): Promise<{ success: boolean }> {
@@ -406,6 +428,17 @@ export class QQClient extends MusicClientBase {
       throw new NotFoundError('Song not found');
     }
     return songId;
+  }
+
+  /** QQ 写入使用数字 ID，详情解析失败不能阻断其它歌曲的提交。 */
+  private async writableSongs(ids: string[]): Promise<{ songs: { id: string; songId: string | number }[]; failures: { id: string }[] }> {
+    const songs: { id: string; songId: string | number }[] = [];
+    const failures: { id: string }[] = [];
+    for (const id of ids) {
+      try { songs.push({ id, songId: await this.resolveWritableSongId(id) }); }
+      catch { failures.push({ id }); }
+    }
+    return { songs, failures };
   }
 
 }

@@ -142,6 +142,20 @@ describe('QQ credential refresh request', () => {
 describe('QQ Android song favorite', () => {
   afterEach(() => jest.dontMock('../../../platforms/qqmusic/util/android-login'))
 
+  test('batch favorite submits one songlist write and keeps single id precedence', async () => {
+    jest.resetModules()
+    const androidLoginCgi = jest.fn().mockResolvedValue({ code: 0, data: { retCode: 0 } })
+    jest.doMock('../../../platforms/qqmusic/util/android-login', () => ({
+      getAndroidLoginContext: () => ({ androidLoginCgi })
+    }))
+    const like = require('../../../platforms/qqmusic/module/like')
+    await like({ uin: '123', qm_keyst: 'key', ids: '11,22', like: true })
+    expect(androidLoginCgi).toHaveBeenCalledTimes(1)
+    expect(androidLoginCgi.mock.calls[0][2].v_songInfo).toEqual([{ songId: 11, songType: 0 }, { songId: 22, songType: 0 }])
+    await like({ uin: '123', qm_keyst: 'key', id: '33', ids: '11,22', like: true })
+    expect(androidLoginCgi.mock.calls[1][2].v_songInfo).toEqual([{ songId: 33, songType: 0 }])
+  })
+
   test('uses Python songlist parameters and checks retCode', async () => {
     jest.resetModules()
     const androidLoginCgi = jest.fn()
