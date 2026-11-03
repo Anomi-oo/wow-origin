@@ -2,7 +2,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 
 describe('release version', () => {
-  test('Node、Tauri 和 Cargo 版本统一为 1.0.6', () => {
+  test('Node、Tauri 和 Cargo 版本统一为 1.0.7', () => {
     const projectDir = process.cwd()
     const packageJson = require(path.join(projectDir, 'package.json'))
     const packageLock = require(path.join(projectDir, 'package-lock.json'))
@@ -11,11 +11,11 @@ describe('release version', () => {
     const cargoLock = fs.readFileSync(path.join(projectDir, 'src-tauri', 'Cargo.lock'), 'utf8')
     const desktopPackage = cargoLock.match(/\[\[package\]\]\nname = "wow-desktop"\nversion = "([^"]+)"/)
 
-    expect(packageJson.version).toBe('1.0.6')
-    expect(packageLock.version).toBe('1.0.6')
-    expect(packageLock.packages[''].version).toBe('1.0.6')
-    expect(tauriConfig.version).toBe('1.0.6')
-    expect(cargoToml).toMatch(/\[package\][\s\S]*?version = "1\.0\.6"/)
-    expect(desktopPackage?.[1]).toBe('1.0.6')
+    expect(packageJson.version).toBe('1.0.7')
+    expect(packageLock.version).toBe('1.0.7')
+    expect(packageLock.packages[''].version).toBe('1.0.7')
+    expect(tauriConfig.version).toBe('1.0.7')
+    expect(cargoToml).toMatch(/\[package\][\s\S]*?version = "1\.0\.7"/)
+    expect(desktopPackage?.[1]).toBe('1.0.7')
   })
 })
