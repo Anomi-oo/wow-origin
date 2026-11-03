@@ -462,6 +462,122 @@ describe('NeteaseClient', () => {
     expect(detail.trackCount).toBe(100)
   })
 
+  test('榜单 API 过滤网页入口和无效歌单，移除空分组并保留无歌曲预览的有效榜单', async () => {
+    const callModule = jest.fn((route) => Promise.resolve(route === 'toplist/detail/v2' ? {
+      code: 200,
+      data: [{
+        name: '官方榜',
+        displayType: 'TOP_3',
+        list: [
+          { id: 19723756, name: '飙升榜', targetType: 'PLAYLIST', canPlay: true },
+          { id: 0, name: '畅销榜', targetType: 'H5', canPlay: false },
+          { id: 0, name: '全民热推榜', targetType: 'H5', canPlay: false },
+          { id: 0, name: '有声书榜', targetType: 'H5', canPlay: false },
+          { id: 123, name: '网页入口', targetType: 'H5' },
+          { id: 0, name: '无效歌单', targetType: 'PLAYLIST' },
+          { name: '缺少 ID', targetType: 'PLAYLIST' },
+          { id: 456, name: '播放受限但可查看详情的歌单榜', targetType: 'PLAYLIST', canPlay: false }
+        ]
+      }, {
+        name: '实体榜',
+        list: [{ id: 0, name: '实体专辑榜', targetType: 'H5', canPlay: false }]
+      }, {
+        name: '曲风榜',
+        displayType: 'ONLY_COVER',
+        list: [{ id: 71385702, name: '网易云ACG榜', targetType: 'PLAYLIST', tracks: null }]
+      }]
+    } : { code: 200, list: [] }))
+    global.__musicPlatformFactory__.getPlatform.mockReturnValue({ callModule })
+
+    const response = await request(createTrackUrlApp(new NeteaseClient(''))).get('/v1/toplist/list').expect(200)
+
+    expect(response.body.data.map(({ name }) => name)).toEqual(['官方榜', '曲风榜'])
+    expect(response.body.data.flatMap(({ list }) => list.map(({ id }) => id))).toEqual(['19723756', '456', '71385702'])
+    expect(response.body.data[1].list[0].tracks).toEqual([])
+  })
+
+  test('完整榜单接口补齐 v2 遗漏的榜单，按 ID 去重并保留原有分组', async () => {
+    const callModule = jest.fn((route) => Promise.resolve(route === 'toplist/detail/v2' ? {
+      code: 200,
+      data: [{
+        name: '官方榜',
+        displayType: 'TOP_3',
+        list: [{ id: 19723756, name: '飙升榜', targetType: 'PLAYLIST', coverUrl: 'https://original-cover' }]
+      }]
+    } : {
+      code: 200,
+      list: [
+        { id: '19723756', name: '飙升榜', coverImgUrl: 'https://other-cover' },
+        { id: 1978921795, name: '网易云电音榜', coverImgUrl: 'https://edm-cover', updateFrequency: '每周五更新' },
+        { id: '1978921795', name: '网易云电音榜' },
+        { id: 3001835560, name: '网易云ACG动画榜', tracks: [{ first: '歌曲', second: '歌手' }] },
+        { id: 0, name: '无效入口' },
+        { id: 123, name: '网页入口', targetType: 'H5' }
+      ]
+    }))
+    global.__musicPlatformFactory__.getPlatform.mockReturnValue({ callModule })
+
+    const response = await request(createTrackUrlApp(new NeteaseClient('MUSIC_U=music-u'))).get('/v1/toplist/list').expect(200)
+    const groups = response.body.data
+
+    expect(groups).toHaveLength(2)
+    expect(groups[0]).toMatchObject({ name: '官方榜', displayType: 'TOP_3', list: [{ id: '19723756', coverUrl: 'https://original-cover' }] })
+    expect(groups[1]).toMatchObject({ name: '更多榜单', displayType: 'ONLY_COVER' })
+    expect(groups[1].list).toEqual([
+      { id: '1978921795', name: '网易云电音榜', coverUrl: 'https://edm-cover', updateFrequency: '每周五更新', tracks: [], targetType: 'PLAYLIST' },
+      { id: '3001835560', name: '网易云ACG动画榜', coverUrl: '', updateFrequency: '', tracks: [{ name: '歌曲', artistName: '歌手' }], targetType: 'PLAYLIST' }
+    ])
+    expect(callModule).toHaveBeenCalledWith('toplist/detail', expect.objectContaining({
+      query: expect.objectContaining({ MUSIC_U: 'music-u', platform: 'netease' })
+    }))
+  })
+
+  test('补充榜单请求失败时仍返回 v2 的有效榜单', async () => {
+    const callModule = jest.fn((route) => Promise.resolve(route === 'toplist/detail/v2' ? {
+      code: 200,
+      data: [{ name: '官方榜', list: [{ id: 19723756, name: '飙升榜', targetType: 'PLAYLIST' }] }]
+    } : { code: 502, message: 'Upstream unavailable' }))
+    global.__musicPlatformFactory__.getPlatform.mockReturnValue({ callModule })
+
+    const groups = await new NeteaseClient('').getToplist()
+
+    expect(groups).toHaveLength(1)
+    expect(groups[0].list.map(({ id }) => id)).toEqual(['19723756'])
+  })
+
+  test('两个榜单接口复用现有平台缓存，跨账号共享并在 24 小时后刷新上游', async () => {
+    const BasePlatform = require('../../../platforms/base/BasePlatform')
+    const { PlatformCache } = require('../../../core/PlatformCache')
+    const platform = new BasePlatform({ name: 'netease' })
+    platform.cache = new PlatformCache()
+    platform.initialized = true
+    platform.modules.set('toplist/detail/v2', require('../../../platforms/netease/module/toplist_detail_v2'))
+    platform.modules.set('toplist/detail', require('../../../platforms/netease/module/toplist_detail'))
+    const upstream = jest.fn((uri) => Promise.resolve({ body: uri.endsWith('/v2') ? {
+      code: 200,
+      data: [{ name: '官方榜', list: [{ id: 19723756, name: '飙升榜', targetType: 'PLAYLIST' }] }]
+    } : { code: 200, list: [{ id: 1978921795, name: '网易云电音榜' }] } }))
+    platform.createRequestFunction = () => upstream
+    global.__musicPlatformFactory__.getPlatform.mockReturnValue(platform)
+    const startedAt = Date.now()
+    const now = jest.spyOn(Date, 'now').mockReturnValue(startedAt)
+
+    const first = await new NeteaseClient('MUSIC_U=first-account').getToplist()
+    const second = await new NeteaseClient('MUSIC_U=second-account').getToplist()
+
+    expect(second).toEqual(first)
+    expect(upstream.mock.calls.map(([uri]) => uri)).toEqual(['/api/toplist/detail/v2', '/api/toplist/detail'])
+
+    now.mockReturnValue(startedAt + 24 * 60 * 60 * 1000 - 1)
+    await new NeteaseClient('').getToplist()
+    expect(upstream).toHaveBeenCalledTimes(2)
+
+    now.mockReturnValue(startedAt + 24 * 60 * 60 * 1000 + 1)
+    await new NeteaseClient('').getToplist()
+    expect(upstream.mock.calls.filter(([uri]) => uri.endsWith('/v2'))).toHaveLength(2)
+    expect(upstream.mock.calls.filter(([uri]) => uri === '/api/toplist/detail')).toHaveLength(2)
+  })
+
   test('favoritePlaylist 通过网易云歌单收藏模块按状态收藏或取消收藏', async () => {
     const callModule = jest.fn().mockResolvedValue({ code: 200 })
     global.__musicPlatformFactory__.getPlatform.mockReturnValue({ callModule })

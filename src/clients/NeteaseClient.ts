@@ -42,23 +42,45 @@ export class NeteaseClient extends MusicClientBase {
   }
 
   async getToplist(): Promise<ToplistGroup[]> {
-    const raw = await this.call('toplist_detail_v2');
+    // v2 只提供精选分组；完整列表用于补齐遗漏的歌单榜，补充请求失败不影响原有分组。
+    const [raw, fullList] = await Promise.all([
+      this.call('toplist_detail_v2'),
+      this.call('toplist_detail').catch(() => ({}))
+    ]);
     const groups = Array.isArray(raw) ? raw : raw.data || raw.list || [];
-    return groups.map((group: any) => ({
+    const isPlaylist = (toplist: any): boolean => (
+      // H5 榜单没有歌单详情，且共用 id=0，会导致客户端列表标识冲突。
+      (!toplist.targetType || toplist.targetType === 'PLAYLIST')
+      && /^[1-9]\d*$/.test(String(toplist.id ?? ''))
+    );
+    const mapToplist = (toplist: any): ToplistGroup['list'][number] => ({
+      id: String(toplist.id),
+      name: toplist.name || '',
+      coverUrl: toplist.coverUrl || toplist.coverImgUrl || '',
+      updateFrequency: toplist.updateFrequency || '',
+      tracks: (toplist.tracks || toplist.trackRankList || toplist.songList || []).slice(0, 3).map((track: any) => ({
+        name: track.first || track.songName || track.songname || '',
+        artistName: track.second || track.artistName || track.singername || ''
+      })),
+      targetType: 'PLAYLIST'
+    });
+    const result: ToplistGroup[] = groups.map((group: any) => ({
       name: group.name || '',
       displayType: group.displayType || group.frontDisplayType || 'TOP_3',
-      list: (group.list || group.toplist || []).map((toplist: any) => ({
-        id: String(toplist.id ?? ''),
-        name: toplist.name || '',
-        coverUrl: toplist.coverUrl || toplist.coverImgUrl || '',
-        updateFrequency: toplist.updateFrequency || '',
-        tracks: (toplist.tracks || toplist.trackRankList || toplist.songList || []).slice(0, 3).map((track: any) => ({
-          name: track.first || track.songName || track.songname || '',
-          artistName: track.second || track.artistName || track.singername || ''
-        })),
-        targetType: toplist.targetType || ''
-      }))
-    }));
+      list: (group.list || group.toplist || []).filter(isPlaylist).map(mapToplist)
+    })).filter((group: ToplistGroup) => group.list.length > 0);
+
+    const existingIds = new Set(result.flatMap((group) => group.list.map((toplist) => toplist.id)));
+    const additional = (fullList.list || []).filter(isPlaylist).filter((toplist: any) => {
+      const id = String(toplist.id);
+      if (existingIds.has(id)) return false;
+      existingIds.add(id);
+      return true;
+    }).map(mapToplist);
+    if (additional.length > 0) {
+      result.push({ name: '更多榜单', displayType: 'ONLY_COVER', list: additional });
+    }
+    return result;
   }
 
   async getToplistTracks(id: string, offset: number, limit: number): Promise<PlaylistDetail> {

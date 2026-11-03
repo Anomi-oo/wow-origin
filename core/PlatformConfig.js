@@ -457,7 +457,7 @@ const DEFAULT_CACHE_CONFIGS = {
   // 详情数据
   'toplist/detail': {
     enabled: true,
-    ttlMinutes: 60  // 60分钟
+    ttlMinutes: 1440
   },
 
   // 详情数据
