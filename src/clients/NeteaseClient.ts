@@ -64,21 +64,31 @@ export class NeteaseClient extends MusicClientBase {
       })),
       targetType: 'PLAYLIST'
     });
-    const result: ToplistGroup[] = groups.map((group: any) => ({
-      name: group.name || '',
-      displayType: group.displayType || group.frontDisplayType || 'TOP_3',
-      list: (group.list || group.toplist || []).filter(isPlaylist).map(mapToplist)
-    })).filter((group: ToplistGroup) => group.list.length > 0);
+    const result: ToplistGroup[] = [];
+    const more: ToplistGroup['list'] = [];
+    for (const group of groups) {
+      const mapped = {
+        name: group.name || '',
+        displayType: group.displayType || group.frontDisplayType || 'TOP_3',
+        list: (group.list || group.toplist || []).filter(isPlaylist).map(mapToplist)
+      };
+      if (group.categoryCode === 'TOPPING') {
+        more.push(...mapped.list);
+      } else if (mapped.list.length > 0) {
+        result.push(mapped);
+      }
+    }
 
-    const existingIds = new Set(result.flatMap((group) => group.list.map((toplist) => toplist.id)));
+    const existingIds = new Set([...more, ...result.flatMap((group) => group.list)].map((toplist) => toplist.id));
     const additional = (fullList.list || []).filter(isPlaylist).filter((toplist: any) => {
       const id = String(toplist.id);
       if (existingIds.has(id)) return false;
       existingIds.add(id);
       return true;
     }).map(mapToplist);
-    if (additional.length > 0) {
-      result.push({ name: '更多榜单', displayType: 'ONLY_COVER', list: additional });
+    more.push(...additional);
+    if (more.length > 0) {
+      result.push({ name: '更多榜单', displayType: 'ONLY_COVER', list: more });
     }
     return result;
   }

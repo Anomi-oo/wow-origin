@@ -412,6 +412,7 @@ describe('NeteaseClient', () => {
       code: 200,
       data: [{
         name: '榜单推荐',
+        categoryCode: 'TOPPING',
         displayType: 'ONLY_COVER',
         list: [{
           id: 1,
@@ -436,7 +437,7 @@ describe('NeteaseClient', () => {
     expect(callModule).toHaveBeenCalledWith('toplist/detail/v2', expect.objectContaining({
       query: expect.objectContaining({ MUSIC_U: 'music-u', platform: 'netease' })
     }))
-    expect(toplists[0]).toMatchObject({ name: '榜单推荐', displayType: 'ONLY_COVER' })
+    expect(toplists[0]).toMatchObject({ name: '更多榜单', displayType: 'ONLY_COVER' })
     expect(toplists[0].list[0]).toMatchObject({ name: '热歌榜', targetType: 'PLAYLIST' })
     expect(toplists[0].list[0].tracks).toHaveLength(3)
     expect(toplists[0].list[0].tracks[0]).toEqual({ name: '第一首', artistName: '歌手 A' })
