@@ -212,6 +212,7 @@ const createRequest = (uri, data, options) => {
       data: new URLSearchParams(encryptData).toString(),
       httpAgent: httpAgent,
       httpsAgent: httpsAgent,
+      ...(options.signal ? { signal: options.signal } : {}),
       ...(dataReq.e_r && {
         encoding: null,
         responseType: 'arraybuffer'

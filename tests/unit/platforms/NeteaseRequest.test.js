@@ -58,6 +58,35 @@ describe('NetEase request transport', () => {
     expect([...encrypt.eapiResDecryptBuffer.mock.calls[0][0]]).toEqual([1, 2, 3, 4])
   })
 
+  test('logout deadline aborts the actual HTTP request when upstream does not respond', async () => {
+    const http = require('node:http')
+    const realAxios = jest.requireActual('axios').default
+    const logout = require('../../../platforms/netease/module/login_logout')
+    const controller = new AbortController()
+    const deadline = jest.spyOn(AbortSignal, 'timeout').mockReturnValue(controller.signal)
+    let notifyRequest, notifyClosed
+    const received = new Promise(resolve => { notifyRequest = resolve })
+    const closed = new Promise(resolve => { notifyClosed = resolve })
+    const server = http.createServer((_req, res) => { res.on('close', notifyClosed); notifyRequest() })
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+    axios.mockImplementation(settings => realAxios({ ...settings, url: `http://127.0.0.1:${server.address().port}/logout`, proxy: false }))
+    const pending = logout({ MUSIC_U: 'account-cookie' }, createRequest)
+    try {
+      await received
+      expect(deadline).toHaveBeenCalledWith(20000)
+      expect(axios.mock.calls[0][0].signal).toBe(controller.signal)
+      const rejected = expect(pending).rejects.toMatchObject({ status: 502 })
+      controller.abort(new DOMException('deadline', 'TimeoutError'))
+      await rejected
+      await closed
+    } finally {
+      controller.abort()
+      await pending.catch(() => {})
+      server.closeAllConnections()
+      await new Promise(resolve => server.close(resolve))
+    }
+  })
+
   test('XEAPI 先获取公钥并用 Android 身份请求歌曲链接', async () => {
     axios.mockImplementation(async (settings) => settings.url.includes('/bsr/sk/get')
       ? {
