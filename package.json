@@ -55,10 +55,12 @@
     "dotenv": "^17.4.2",
     "express": "^5.1.0",
     "got": "^11.8.6",
+    "mqtt-packet": "^9.0.2",
     "pako": "^3.0.2",
     "qrc-decoder": "1.0.2",
     "qrcode": "^1.5.4",
-    "tough-cookie": "^6.0.0"
+    "tough-cookie": "^6.0.0",
+    "ws": "^8.22.1"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260918.1",

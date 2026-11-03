@@ -46,6 +46,44 @@ describe('login router', () => {
     logSpy.mockRestore()
   })
 
+  test.each([undefined, 'wx', 'mobile'])('QQ QR method %s is forwarded and cancellation invalidates token', async qrType => {
+    const workDir = makeWorkDir()
+    const callModule = jest.fn(async () => ({ code: 200, body: { data: { unikey: 'qr-token', qrImg: 'data:image/png;base64,test' } } }))
+    const { app } = createApp(workDir, { getPlatform: () => ({ callModule }) })
+    await request(app).post('/login/api/start').send({ mode: 'update', api_access_key: 'key-1', qrType }).expect(200)
+    expect(callModule).toHaveBeenCalledWith('login/qr/key', expect.objectContaining({ query: expect.objectContaining({ qrType: qrType ?? 'qq' }) }))
+    await request(app).post('/login/api/cancel').send({ token: 'qr-token' }).expect(200)
+    await request(app).post('/login/api/check').send({ token: 'qr-token' }).expect(400)
+    await request(app).post('/login/api/cancel').send({ token: 'qr-token' }).expect(200)
+    expect(callModule).toHaveBeenCalledTimes(1)
+  })
+
+  test('cancellation during nickname lookup prevents account creation', async () => {
+    let finishProfile, profileStarted
+    const started = new Promise(resolve => { profileStarted = resolve })
+    const callModule = jest.fn(async route => {
+      if (route === 'login/qr/key') return { code: 200, body: { data: { unikey: 'qr-token', qrImg: 'image' } } }
+      if (route === 'login/qr/check') return { code: 200, body: { code: 803 }, cookie: { uin: '123', qm_keyst: 'key' } }
+      profileStarted()
+      return new Promise(resolve => { finishProfile = resolve })
+    })
+    const { app, registry } = createApp(makeWorkDir(), { getPlatform: () => ({ callModule }) })
+    await request(app).post('/login/api/start').send({ mode: 'create', platform: 'qq', qrType: 'wx' }).expect(200)
+    const checking = request(app).post('/login/api/check').send({ token: 'qr-token' }).then(response => response)
+    await started
+    await request(app).post('/login/api/cancel').send({ token: 'qr-token' }).expect(200)
+    finishProfile({ code: 200, body: { nickname: '取消的账号' } })
+    expect((await checking).status).toBe(400)
+    expect(registry.sessions).toHaveLength(1)
+  })
+
+  test('invalid QQ QR type is rejected before contacting upstream', async () => {
+    const callModule = jest.fn()
+    const { app } = createApp(makeWorkDir(), { getPlatform: () => ({ callModule }) })
+    await request(app).post('/login/api/start').send({ mode: 'create', platform: 'qq', qrType: 'other' }).expect(400)
+    expect(callModule).not.toHaveBeenCalled()
+  })
+
   test.each([
     ['qq', 'qqmusic', 'Cookie: qqmusic_uin=123; qqmusic_key=secret', 'login/cookie', { nickname: 'QQ 用户' }],
     ['netease', 'netease', 'MUSIC_U=secret', 'user/detail', { nickname: '网易用户', userId: 456 }]

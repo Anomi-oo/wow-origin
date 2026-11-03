@@ -28,13 +28,15 @@ function page({ adminManagementEnabled = false } = {}) {
   }
   const methods = ['qr', 'phone', 'cookie'].map(method => element(method, { method }))
   const platforms = ['qq', 'netease', 'ytmusic'].map(platform => element(platform, { platform }))
+  const qrTypes = ['qq', 'wx', 'mobile'].map(qrType => element(`qr-${qrType}`, { qrType }))
   const steps = ['login-choose', 'login-verify', 'login-scan', 'account-config'].map(id => element(id));
   const document = {
     createElement: tag => element(`${tag}-${elements.size}`),
     getElementById: element, documentElement: element('document'), body: element('body'),
-    querySelectorAll: selector => selector === '.login-step' ? steps : selector === '#login-methods button' ? methods : selector === '#platform-switch button' ? platforms : [],
+    querySelectorAll: selector => selector === '.login-step' ? steps : selector === '#login-methods button[data-method]' ? methods : selector === '#platform-switch button' ? platforms : selector === '#qq-qr-types button' ? qrTypes : [],
   }
   const fetch = jest.fn(async url => {
+    if (url === '/login/api/cancel') return { ok: true, json: async () => ({ code: 200, data: null }) }
     if (url === '/app/api/status') return { ok: true, json: async () => ({ code: 200, data: { adminManagementEnabled } }) }
     if (url === '/app/api/origin-qr' || url === '/login/api/start') return { ok: true, json: async () => ({ code: 200, data: { platform: 'qq', token: 'qr-token', qrImage: 'data:image/png;base64,test' } }) }
     throw new Error('Unexpected request')
@@ -220,4 +222,43 @@ test('switching account keeps details visible and ignores stale responses', asyn
   expect(ui.element('account-key').textContent).toBe('third')
   expect(ui.element('account-config').getAttribute('inert')).toBeNull()
   expect(ui.element('login-error').textContent).toBe('加载失败')
+})
+
+test('QR method selection sends the type and cancels stale QR sessions', async () => {
+  const ui = page()
+  await new Promise(setImmediate)
+  let resolveFirst
+  const result = token => ({ ok: true, json: async () => ({ code: 200, data: { platform: 'qq', token, qrImage: token } }) })
+  ui.fetch.mockImplementation(async (url, options) => {
+    if (url === '/login/api/start') {
+      if (JSON.parse(options.body).qrType === 'qq') return new Promise(resolve => { resolveFirst = resolve })
+      return result(JSON.parse(options.body).qrType)
+    }
+    if (url === '/login/api/cancel') return { ok: true, json: async () => ({ code: 200 }) }
+    throw new Error('Unexpected request')
+  })
+  ui.element('choose-create').handlers.click()
+  ui.element('qr-wx').handlers.click()
+  await new Promise(setImmediate)
+  expect(ui.element('scan-message').textContent).toBe('请使用微信扫码')
+  resolveFirst(result('stale-qq'))
+  await new Promise(setImmediate)
+  expect(ui.element('login-qr').src).toBe('wx')
+  ui.element('qr-mobile').handlers.click()
+  await new Promise(setImmediate)
+  expect(ui.element('scan-message').textContent).toBe('请使用 QQ 音乐扫码')
+  const cancelled = () => ui.fetch.mock.calls.filter(([url]) => url === '/login/api/cancel').map(([, options]) => JSON.parse(options.body).token)
+  expect(cancelled()).toEqual(expect.arrayContaining(['stale-qq', 'wx']))
+  ui.element('cookie').handlers.click()
+  expect(cancelled()).toContain('mobile')
+  expect(ui.element('qq-qr-types').classList.contains('hidden')).toBe(false)
+  expect(ui.element('qr').classList.contains('hidden')).toBe(true)
+  expect(ui.element('qr-mobile').classList.contains('active')).toBe(false)
+  ui.element('qr-mobile').handlers.click()
+  await new Promise(setImmediate)
+  expect(ui.element('qr-mobile').classList.contains('active')).toBe(true)
+  expect(ui.element('qr-login-panel').classList.contains('hidden')).toBe(false)
+  ui.element('scan-back').handlers.click()
+  ui.element('netease').handlers.click()
+  expect(ui.element('qq-qr-types').classList.contains('hidden')).toBe(true)
 })

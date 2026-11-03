@@ -88,7 +88,11 @@
               <button data-platform="ytmusic" type="button">YouTube Music</button>
             </div>
             <div id="qr-login-panel">
-              <div class="qr-frame login-qr"><img id="login-qr" alt="账号登录二维码"><span id="qr-placeholder">正在生成二维码…</span></div>
+              <div class="qr-frame login-qr">
+                <img id="login-qr" alt="账号登录二维码">
+                <span id="qr-placeholder">正在生成二维码…</span>
+                <button id="qr-retry" class="qr-retry hidden" type="button">重新获取</button>
+              </div>
               <p id="scan-message" class="message" aria-live="polite">准备扫码登录</p>
             </div>
             <form id="phone-login-panel" class="hidden">
@@ -109,7 +113,12 @@
               <p id="ytmusic-cookie-help" class="message hidden">在已登录的 music.youtube.com 中，打开开发者工具的网络面板，从 youtubei/v1/browse 请求头复制完整 Cookie。</p>
               <div class="button-row"><button id="cookie-submit" class="button primary" type="submit">登录</button></div>
             </form>
-            <div id="login-methods" class="login-methods" role="group" aria-label="其他登录方式">
+            <div id="login-methods" class="login-methods" role="group" aria-label="登录方式">
+              <div id="qq-qr-types" role="group" aria-label="扫码方式">
+                <button data-qr-type="qq" type="button">QQ</button>
+                <button data-qr-type="wx" type="button">微信</button>
+                <button data-qr-type="mobile" type="button">QQ 音乐</button>
+              </div>
               <button data-method="qr" class="hidden" type="button">扫码登录</button>
               <button data-method="cookie" type="button">Cookie 登录</button>
             </div>

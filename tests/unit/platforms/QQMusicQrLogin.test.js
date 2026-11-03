@@ -108,6 +108,45 @@ describe('shared QQ QR login', () => {
     }))
     expect(JSON.stringify(errorLog.mock.calls)).not.toContain('private-value')
   })
+  async function startWx() {
+    http.mockResolvedValueOnce(new Response('<img src="/connect/qrcode/wx-id">'))
+      .mockResolvedValueOnce(new Response('wx-image'))
+    return qr.startLogin(undefined, 'wx')
+  }
+  test('WeChat statuses and credential exchange retain refresh fields and login type', async () => {
+    const { token, qrcode } = await startWx()
+    expect(qrcode).toMatch(/^data:image\/jpeg;base64,/)
+    for (const [code, status] of [['408', 'waiting'], ['404', 'confirming']]) {
+      http.mockResolvedValueOnce(new Response(`window.wx_errcode=${code};window.wx_code='';`))
+      expect(await qr.pollLogin(token)).toMatchObject({ status, qrType: 'wx' })
+    }
+    http.mockResolvedValueOnce(new Response("window.wx_errcode=405;window.wx_code='wx-auth';"))
+    androidLoginCgi.mockResolvedValueOnce({ code: 0, data: { musicid: 999, musickey: 'wx-key', refresh_token: 'refresh', unionid: 'union' } })
+    expect(await qr.pollLogin(token)).toMatchObject({ status: 'done', cookie: { loginType: '1', refresh_token: 'refresh', unionid: 'union' } })
+    expect(androidLoginCgi).toHaveBeenCalledWith('music.login.LoginServer', 'Login', { code: 'wx-auth', strAppid: 'wx48db31d50e334801' }, {}, { tmeLoginType: 1 })
+    expect(await qr.pollLogin(token)).toEqual({ status: 'expired' })
+  })
+  test('WeChat long-poll timeout keeps session; cancellation prevents a late exchange binding credentials', async () => {
+    const { token } = await startWx()
+    http.mockRejectedValueOnce(new DOMException('timed out', 'TimeoutError'))
+    expect(await qr.pollLogin(token)).toMatchObject({ status: 'waiting' })
+    http.mockResolvedValueOnce(new Response("window.wx_errcode=405;window.wx_code='wx-auth';"))
+    let finish
+    androidLoginCgi.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    const pending = qr.pollLogin(token)
+    await new Promise(setImmediate)
+    qr.cancelLogin(token)
+    finish({ code: 0, data: { musicid: 999, musickey: 'late-key' } })
+    expect(await pending).toMatchObject({ status: 'error' })
+    expect(bindAndroidLoginContext).not.toHaveBeenCalled()
+  })
+  test.each([['402', 'expired'], ['403', 'error']])('WeChat terminal status %s deletes session', async (code, status) => {
+    const { token } = await startWx()
+    http.mockResolvedValueOnce(new Response(`window.wx_errcode=${code};window.wx_code='';`))
+    expect(await qr.pollLogin(token)).toMatchObject({ status })
+    expect(await qr.pollLogin(token)).toEqual({ status: 'expired' })
+    expect(androidLoginCgi).not.toHaveBeenCalled()
+  })
   test('parses combined and separate Set-Cookie without breaking Expires', () => {
     const combined = 'one=1; Expires=Wed, 21 Oct 2030 07:28:00 GMT; Path=/, p_skey=a=b; Path=/'
     expect(responseCookies({ get: () => combined })).toEqual({ one: '1', p_skey: 'a=b' })

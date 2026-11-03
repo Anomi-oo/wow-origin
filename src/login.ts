@@ -381,9 +381,13 @@ export function createLoginRouter({
       const { mode, platform, apiAccessKey } = loginTarget(req.body);
       if (platform === 'ytmusic') throw new BadRequestError('YouTube Music 请使用 Cookie 登录');
 
+      const qrType = req.body?.qrType ?? 'qq';
+      if (platform === 'qq' && !['qq', 'wx', 'mobile'].includes(qrType)) {
+        throw new BadRequestError('不支持的 QQ 音乐扫码方式');
+      }
       const existing = mode === 'update' ? registry.byAccessKey.get(apiAccessKey) : undefined;
       const result = await callLoginModule(platformFactory, platform, 'login/qr/key',
-        platform === 'qq' ? existingQqDeviceQuery(existing) : {});
+        platform === 'qq' ? { ...existingQqDeviceQuery(existing), qrType } : {});
       if (mode === 'update') requireAccount(registry, apiAccessKey);
       const qr = getQrPayload(platform, result);
       const qrImage = qr.qrImage || (qr.qrText
@@ -398,6 +402,16 @@ export function createLoginRouter({
     } catch (error) {
       next(error);
     }
+  });
+
+  router.post('/api/cancel', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const token = requireLoginToken(req.body?.token, 'token 是必填参数');
+      const pending = await pendingLogins.get(token);
+      if (pending?.platform === 'qq') require('../platforms/qqmusic/util/qq-login').cancelLogin(token);
+      await pendingLogins.delete(token);
+      res.json({ code: 200, data: null });
+    } catch (error) { next(error); }
   });
 
   router.post('/api/check', async (req: Request, res: Response, next: NextFunction) => {
@@ -418,7 +432,9 @@ export function createLoginRouter({
 
       if (code === 803) {
         const cookie = serializeCookie(result.cookie);
-        const data = await saveLogin(pending, cookie);
+        const name = mode === 'create' ? await resolveLoggedInAccountName(platform, cookie, platformFactory) : undefined;
+        if (!await pendingLogins.get(token)) throw new BadRequestError('登录会话已取消');
+        const data = await saveLogin(pending, cookie, name);
         await pendingLogins.delete(token).catch((error) => {
           console.warn('[login] 清理已完成的扫码会话失败', error);
         });

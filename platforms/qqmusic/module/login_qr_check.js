@@ -9,7 +9,7 @@ module.exports = async (query, request) => {
       return {
         body: {
           code: 801,
-          message: "请使用手机QQ扫码"
+          message: result.qrType === 'wx' ? '请使用微信扫码' : result.qrType === 'mobile' ? '请使用 QQ 音乐扫码' : '请使用手机QQ扫码'
         }
       }
     case 'confirming':
