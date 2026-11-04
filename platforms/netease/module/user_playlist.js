@@ -62,6 +62,7 @@ function formatUserPlaylist(data, uid, query, offset) {
   const formattedPlaylists = filteredPlaylists.map(playlist => ({
     id: Number(playlist.id),
     name: playlist.name,
+    specialType: playlist.specialType,
     coverImgUrl: toHttps(playlist.coverImgUrl || ''),
     trackCount: Number(playlist.trackCount || 0),
     playCount: Number(playlist.playCount || 0),

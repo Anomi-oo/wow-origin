@@ -38,6 +38,12 @@ const PLATFORM_QUALITY_CONFIGS: Record<MusicPlatform, PlatformQualityConfig> = {
       { key: 'master', label: '超清母带', rank: 90, sourceField: 'jm' }
     ]
   },
+  kugou: { qualities: [
+    { key: 'standard', label: '标准', rank: 10, bitrate: 128000, format: 'mp3' },
+    { key: 'exhigh', label: '高品质', rank: 30, bitrate: 320000, format: 'mp3' },
+    { key: 'lossless', label: '无损', rank: 40, format: 'flac' },
+    { key: 'hires', label: 'Hi-Res', rank: 50, format: 'flac' }
+  ] },
   ytmusic: {
     qualities: [
       { key: 'standard', label: '标准', rank: 10, format: 'm4a' },

@@ -1,4 +1,5 @@
 import type { MusicPlatform } from './types';
+import type { KugouEdition } from './kugouState';
 
 export type LoginMode = 'create' | 'update';
 
@@ -7,6 +8,9 @@ export interface PendingLogin {
   apiAccessKey: string;
   platform: MusicPlatform;
   createdAt: number;
+  kugouCookie?: string;
+  kugouEdition?: KugouEdition;
+  phone?: string;
 }
 
 export interface PendingPhone extends PendingLogin {

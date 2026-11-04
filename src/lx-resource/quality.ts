@@ -3,6 +3,9 @@ import type { LxQuality } from './types';
 
 /** 只映射相同档位；源不支持时由外层根据歌曲音质表决定降级。 */
 export function getExactLxQuality(platform: MusicPlatform, quality: string | undefined, supported: readonly LxQuality[]): LxQuality | undefined {
+  if (platform === 'kugou' && quality === 'hires') {
+    return supported.includes('flac24bit') ? 'flac24bit' : supported.includes('hires') ? 'hires' : undefined;
+  }
   const mapping: Record<string, LxQuality> = {
     standard: '128k',
     exhigh: '320k',

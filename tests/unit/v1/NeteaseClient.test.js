@@ -326,7 +326,7 @@ describe('NeteaseClient', () => {
     const callModule = jest.fn().mockResolvedValue({
       code: 200,
       playlist: [
-        { id: 1, name: '我喜欢的音乐', trackCount: 2, creator: { userId: 88 } },
+        { id: 1, name: '我喜欢的音乐', specialType: 5, subscribed: false, trackCount: 2, creator: { userId: 88 } },
         {
           id: 'cloud-storage',
           name: '云盘音乐',
@@ -342,7 +342,7 @@ describe('NeteaseClient', () => {
     const client = new NeteaseClient('MUSIC_U=music-u')
     const playlists = await client.getUserPlaylist()
 
-    expect(playlists[1]).toMatchObject({
+    expect(playlists[0]).toMatchObject({
       id: 'cloud-storage',
       name: '云盘音乐',
       coverUrl: '',
@@ -359,7 +359,7 @@ describe('NeteaseClient', () => {
           code: 200,
           playlist: [
             { id: 100, name: '普通歌单', trackCount: 1, creator: {} },
-            { id: 200, name: '小明喜欢的音乐', trackCount: 2, creator: {} },
+            { id: 200, specialType: 5, subscribed: false, name: '小明喜欢的音乐', trackCount: 2, creator: {} },
             { id: 300, name: '小红喜欢的音乐', trackCount: 1, creator: {} }
           ]
         })

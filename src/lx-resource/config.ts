@@ -5,6 +5,7 @@ import {
   LX_QUALITIES,
   LX_SOURCE_ENV_KEYS,
   type LxPlatform,
+  type LxSourceCapabilities,
   type LxQuality,
   type LxScriptInfo,
   type LxSourceConfig
@@ -76,14 +77,21 @@ export function sourceLabel(name: string, hash: string): string {
   return `${name || 'unknown'}#${hash.slice(0, 6)}`;
 }
 
-export function mapMusicPlatformToLx(platform: MusicPlatform): LxPlatform {
-  return platform === 'qq' ? 'tx' : 'wy';
+export function mapMusicPlatformToLx(platform: MusicPlatform): LxPlatform | undefined {
+  return platform === 'qq' ? 'tx' : platform === 'netease' ? 'wy' : platform === 'kugou' ? 'kg' : undefined;
+}
+
+/** Keep the source identifier declared by the script when it uses the Kugou alias. */
+export function selectLxPlatform(platform: MusicPlatform, capabilities: LxSourceCapabilities): LxPlatform | undefined {
+  const mapped = mapMusicPlatformToLx(platform);
+  if (mapped && capabilities[mapped]) return mapped;
+  return platform === 'kugou' && capabilities.kugou ? 'kugou' : undefined;
 }
 
 export function getLxQualityCandidates(requestedQuality: string | undefined, supported: readonly LxQuality[], platform: MusicPlatform = 'netease'): LxQuality[] {
   const available = platform === 'qq'
     ? supported.filter((quality) => ['128k', '320k', 'flac', 'flac24bit', 'master'].includes(quality))
-    : supported;
+    : platform === 'kugou' ? supported.filter((quality) => ['128k', '320k', 'flac', 'flac24bit', 'hires'].includes(quality)) : supported;
   if (available.length === 0 || requestedQuality === 'jyeffect') return [];
   const fallback: LxQuality[] = ['flac', '320k', '128k'];
   const candidates: LxQuality[] = [];
@@ -96,7 +104,7 @@ export function getLxQualityCandidates(requestedQuality: string | undefined, sup
   } else if (requestedQuality === 'master') {
     candidates.push('master');
   } else if (requestedQuality === 'hires') {
-    candidates.push('hires');
+    candidates.push(platform === 'kugou' && available.includes('flac24bit') ? 'flac24bit' : 'hires');
   } else if (requestedQuality === 'sky') {
     candidates.push('atmos');
   } else if (requestedQuality === 'standard') {
@@ -118,11 +126,11 @@ export function selectLxQuality(requestedQuality: string | undefined, supported:
   return getLxQualityCandidates(requestedQuality, supported, platform)[0];
 }
 
-export function mapLxQualityToTrackUrl(url: string, quality: LxQuality) {
+export function mapLxQualityToTrackUrl(url: string, quality: LxQuality, platform?: MusicPlatform) {
   if (quality === 'master') {
     return { url, quality: 'master', format: '', bitrate: null, size: 0 };
   }
-  if (quality === 'hires') {
+  if (quality === 'hires' || (platform === 'kugou' && quality === 'flac24bit')) {
     return { url, quality: 'hires', format: '', bitrate: null, size: 0 };
   }
   if (quality === 'atmos') {

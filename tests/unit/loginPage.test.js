@@ -27,13 +27,13 @@ function page({ adminManagementEnabled = false } = {}) {
     return el
   }
   const methods = ['qr', 'phone', 'cookie'].map(method => element(method, { method }))
-  const platforms = ['qq', 'netease', 'ytmusic'].map(platform => element(platform, { platform }))
+  const platforms = ['qq', 'netease', 'ytmusic', 'kugou'].map(platform => element(platform, { platform }))
   const qrTypes = ['qq', 'wx', 'mobile'].map(qrType => element(`qr-${qrType}`, { qrType }))
   const steps = ['login-choose', 'login-verify', 'login-scan', 'account-config'].map(id => element(id));
   const document = {
     createElement: tag => element(`${tag}-${elements.size}`),
     getElementById: element, documentElement: element('document'), body: element('body'),
-    querySelectorAll: selector => selector === '.login-step' ? steps : selector === '#login-methods button[data-method]' ? methods : selector === '#platform-switch button' ? platforms : selector === '#qq-qr-types button' ? qrTypes : [],
+    querySelectorAll: selector => selector === '.login-step' ? steps : selector === '#login-methods button[data-method]' ? methods : selector === '#platform-switch button' ? platforms : selector === '#qq-qr-types button' ? qrTypes : selector === '#lx-source-list input' ? element('lx-source-list').children.map(row => row.children[0]) : [],
   }
   const fetch = jest.fn(async url => {
     if (url === '/login/api/cancel') return { ok: true, json: async () => ({ code: 200, data: null }) }
@@ -100,7 +100,7 @@ test('desktop only allows the local CAPTCHA proxy frame', () => {
   expect(html).toContain('<iframe id="phone-captcha-frame"')
   expect(html).toContain('sandbox="allow-scripts allow-forms"')
   expect(html).not.toContain('<a id="phone-captcha"')
-  expect(html).not.toContain('<button data-method="phone"')
+  expect(html).toContain('<button data-method="phone" class="hidden"')
 })
 
 test('relogin title uses the configured name across methods and resets when creating an account', async () => {
@@ -262,3 +262,71 @@ test('QR method selection sends the type and cancels stale QR sessions', async (
   ui.element('netease').handlers.click()
   expect(ui.element('qq-qr-types').classList.contains('hidden')).toBe(true)
 })
+
+
+test('Kugou exposes SMS login with mainland country code and hides it on other platforms', async () => {
+  const { element } = page();
+  await new Promise(setImmediate);
+  element('kugou').handlers.click();
+  expect(element('phone').classList.contains('hidden')).toBe(false);
+  expect(element('phone-country').disabled).toBe(true);
+  expect(element('phone-country').value).toBe('86');
+  element('netease').handlers.click();
+  expect(element('phone').classList.contains('hidden')).toBe(true);
+  expect(element('phone-country').disabled).toBe(false);
+});
+
+test('Kugou account settings allow enabling LX and submit account source URLs', async () => {
+  const { element, fetch } = page();
+  await new Promise(setImmediate);
+  const account = { platform: 'kugou', apiAccessKey: 'kugou-key', name: '酷狗', useLuoxue: false, lxSource: ['https://source.test/kg.js'] };
+  fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ code: 200, data: account }) });
+  await element('verify-submit').handlers.click();
+  expect(element('account-luoxue').disabled).toBe(false);
+  expect(element('account-lx-source-settings').classList.contains('hidden')).toBe(false);
+  element('account-luoxue').checked = true;
+  fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ code: 200, data: { ...account, useLuoxue: true } }) });
+  await element('save-config').handlers.click();
+  const [, options] = fetch.mock.calls.find(([url]) => url === '/login/api/account/config');
+  expect(JSON.parse(options.body)).toMatchObject({ api_access_key: 'kugou-key', useLuoxue: true, lxSource: account.lxSource });
+});
+
+test('Kugou edition switching cancels the old QR and sends the chosen edition for QR and SMS', async () => {
+  const { element, fetch } = page();
+  await new Promise(setImmediate);
+  fetch.mockImplementation(async (url, options) => {
+    const body = JSON.parse(options.body);
+    if (url === '/login/api/cancel') return { ok: true, json: async () => ({ code: 200 }) };
+    if (url === '/login/api/start') return { ok: true, json: async () => ({ code: 200, data: { platform: 'kugou', token: `qr-${body.kugouEdition}`, qrImage: 'image' } }) };
+    if (url === '/login/api/phone/send') return { ok: true, json: async () => ({ code: 200, data: { status: 'sent', token: 'sms', retryAfter: 0 } }) };
+    throw new Error('Unexpected request');
+  });
+  element('choose-create').handlers.click();
+  element('kugou').handlers.click();
+  await new Promise(setImmediate);
+  expect(element('kugou-edition-field').classList.contains('hidden')).toBe(false);
+  expect(element('kugou-edition').value).toBe('standard');
+  element('kugou-edition').value = 'lite';
+  element('kugou-edition').handlers.change();
+  await new Promise(setImmediate);
+  expect(element('scan-message').textContent).toBe('请使用酷狗概念版扫码');
+  expect(fetch.mock.calls.filter(([url]) => url === '/login/api/start').at(-1)[1].body).toContain('"kugouEdition":"lite"');
+  expect(fetch.mock.calls.some(([url, options]) => url === '/login/api/cancel' && JSON.parse(options.body).token === 'qr-standard')).toBe(true);
+  element('phone').handlers.click();
+  await element('phone-send').handlers.click();
+  const sent = fetch.mock.calls.find(([url]) => url === '/login/api/phone/send');
+  expect(JSON.parse(sent[1].body).kugouEdition).toBe('lite');
+});
+
+test('relogin displays and locks the saved concept edition', async () => {
+  const { element, fetch } = page();
+  await new Promise(setImmediate);
+  fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ code: 200, data: { platform: 'kugou', kugouEdition: 'lite', apiAccessKey: 'key', name: '概念版账号' } }) });
+  await element('verify-submit').handlers.click();
+  expect(element('account-platform').textContent).toContain('概念版');
+  element('relogin').handlers.click();
+  expect(element('kugou-edition').value).toBe('lite');
+  expect(element('kugou-edition').disabled).toBe(true);
+  const qr = fetch.mock.calls.filter(([url]) => url === '/login/api/start').at(-1);
+  expect(JSON.parse(qr[1].body)).toMatchObject({ mode: 'update', kugouEdition: 'lite', api_access_key: 'key' });
+});

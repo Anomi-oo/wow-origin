@@ -1,3 +1,4 @@
+import { type KugouAccountContext, type KugouAccountState, normalizeKugouState, kugouUserId, kugouEdition } from './kugouState';
 import { PlaylistFavorites } from './playlistFavorites';
 import path from 'path';
 import { randomUUID } from 'crypto';
@@ -14,9 +15,10 @@ export interface RawMusicAccount {
   lxSource?: unknown;
   deviceId?: unknown;
   deviceState?: unknown;
+  kugouState?: unknown;
 }
 
-export interface MusicAccountSession {
+export interface MusicAccountSession extends KugouAccountContext {
   platform: MusicPlatform;
   name: string;
   cookie: string;
@@ -106,6 +108,7 @@ export const sessionsTemplate: RawMusicAccount[] = [
 export function normalizeAccountPlatform(value: unknown): MusicPlatform {
   const platform = String(value || '').trim().toLowerCase();
   if (platform === 'qq') return 'qq';
+  if (platform === 'kugou') return 'kugou';
   if (platform === 'netease') return 'netease';
   if (platform === 'ytmusic' || platform === 'youtube-music') return 'ytmusic';
   throw new Error(`不支持的平台: ${platform || '<empty>'}`);
@@ -235,8 +238,10 @@ export function extractAuthorizationToken(value: string | undefined): string {
 export function loadAccountSessions(storeInput: AccountStoreInput = process.cwd()): AccountSessionRegistry {
   const emptyRegistry: AccountSessionRegistry = { sessions: [], byAccessKey: new Map() };
   let rawAccounts: unknown;
+  let store: AccountStore;
   try {
-    rawAccounts = resolveAccountStore(storeInput).list();
+    store = resolveAccountStore(storeInput);
+    rawAccounts = store.list();
   } catch (error) {
     console.error('[accounts] 读取账号数据库失败', error);
     printTemplate();
@@ -282,6 +287,7 @@ export function loadAccountSessions(storeInput: AccountStoreInput = process.cwd(
         lxSource: loadAccountLxSources(account.lxSource, accountName),
         ...(account.deviceId ? { deviceId: String(account.deviceId) } : {}),
         ...(account.deviceState ? { deviceState: String(account.deviceState) } : {}),
+        kugouState: platform === 'kugou' ? normalizeKugouState(account.kugouState, String(account.cookie || '')) : undefined,
         favoriteTrackIds: new Set<string>(),
         userPlaylistIds: new Set<string>(),
         playlistFavorites: new PlaylistFavorites(),
@@ -308,6 +314,7 @@ export function loadAccountSessions(storeInput: AccountStoreInput = process.cwd(
     return true;
   });
 
+  sessions.forEach(session => bindKugouStateStore(session, store));
   const byAccessKey = new Map<string, MusicAccountSession>();
   sessions.forEach((session) => byAccessKey.set(session.apiAccessKey, session));
   console.log(`[accounts] 已注册 ${sessions.length} 个账号`);
@@ -346,6 +353,7 @@ export function updateAccountCookieByAccessKey(
     throw new Error('登录成功但未获取到有效 cookie');
   }
 
+  if (platform === 'kugou') kugouEdition(normalizedCookie);
   const store = resolveAccountStore(storeInput);
   const rawAccounts = store.list();
 
@@ -377,7 +385,20 @@ export function updateAccountCookieByAccessKey(
     throw new Error('QQ 刷新返回的设备状态无效');
   }
   account.cookie = normalizedCookie;
-  store.update(token, { cookie: normalizedCookie, ...deviceFields });
+  const kugouIdentityChanged = platform === 'kugou' && (kugouUserId(session.cookie) !== kugouUserId(normalizedCookie) || kugouEdition(session.cookie) !== kugouEdition(normalizedCookie));
+  store.update(token, { cookie: normalizedCookie, ...deviceFields, ...(kugouIdentityChanged ? { kugouState: undefined } : {}) });
+  if (kugouIdentityChanged) {
+    session.kugouState = undefined;
+    session.kugouPlaylists = undefined;
+    session.kugouPlaylistsLoading = undefined;
+    session.favoriteTrackIds.clear();
+    session.userPlaylistIds.clear();
+    session.playlistFavorites.clear();
+    session.favoriteArtistIds.clear();
+    session.favoriteAlbumIds.clear();
+    session.favoriteArtistsLoaded = false;
+    session.favoriteAlbumsLoaded = false;
+  }
 
   session.cookie = normalizedCookie;
   Object.assign(session, deviceFields);
@@ -420,7 +441,7 @@ export function createAccountWithCookie(
   }
 
   const normalizedName = String(accountName || '').trim()
-    || (platform === 'qq' ? 'QQ 音乐' : platform === 'ytmusic' ? 'YouTube Music' : '网易云音乐');
+    || (platform === 'kugou' ? '酷狗音乐' : platform === 'qq' ? 'QQ 音乐' : platform === 'ytmusic' ? 'YouTube Music' : '网易云音乐');
   const account: RawMusicAccount = {
     platform,
     name: normalizedName,
@@ -451,6 +472,7 @@ export function createAccountWithCookie(
     favoriteArtistsLoaded: false,
     favoriteAlbumsLoaded: false
   };
+  bindKugouStateStore(session, store);
   registry.sessions.push(session);
   registry.byAccessKey.set(token, session);
 
@@ -518,4 +540,19 @@ export function deleteAccount(apiAccessKey: string, registry: AccountSessionRegi
   session.cookie = ''; session.deviceId = undefined; session.deviceState = undefined;
   session.playlistFavorites.clear();
   session.lxSource = []; session.favoriteArtistsLoaded = false; session.favoriteAlbumsLoaded = false;
+}
+
+function bindKugouStateStore(session: MusicAccountSession, store: AccountStore): void {
+  if (session.platform !== 'kugou') return;
+  session.saveKugouState = async (state: KugouAccountState) => {
+    const edition = kugouEdition(session.cookie);
+    const stored = store.list().find(account => account.api_access_key === session.apiAccessKey);
+    if (!stored || state.userId !== kugouUserId(session.cookie) || state.userId !== kugouUserId(String(stored.cookie || '')) || edition !== kugouEdition(String(stored.cookie || ''))) {
+      throw new Error('酷狗账号已变更，无法保存旧账号歌单标识');
+    }
+    store.update(session.apiAccessKey, { kugouState: state });
+    await store.flush?.();
+    if (state.userId !== kugouUserId(session.cookie) || edition !== kugouEdition(session.cookie)) throw new Error('酷狗账号已变更，无法保存旧账号歌单标识');
+    session.kugouState = state;
+  };
 }

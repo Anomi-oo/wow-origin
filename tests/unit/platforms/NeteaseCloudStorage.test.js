@@ -22,7 +22,7 @@ describe('NetEase cloud storage playlist', () => {
       body: {
         code: 200,
         playlist: [
-          { id: 1, name: '我喜欢的音乐', creator: { userId: 88 } },
+          { id: 1, name: '我喜欢的音乐', specialType: 5, creator: { userId: 88 } },
           { id: 2, name: '自建歌单', creator: { userId: 88 } }
         ]
       }
@@ -31,6 +31,7 @@ describe('NetEase cloud storage playlist', () => {
     const result = await userPlaylist({ uid: 88, limit: 2, offset: 0 }, request)
 
     expect(result.playlist.map(item => item.id)).toEqual([1, 'cloud-storage', 2])
+    expect(result.playlist[0]).toMatchObject({ specialType: 5, subscribed: false })
     expect(result.total).toBe(3)
     expect(request).toHaveBeenCalledWith('/api/user/playlist', {
       uid: 88,

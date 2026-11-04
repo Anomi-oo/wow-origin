@@ -10,7 +10,7 @@ import {
   createLxSourceConfigs,
   getLxQualityCandidates,
   mapLxQualityToTrackUrl,
-  mapMusicPlatformToLx,
+  selectLxPlatform,
   parseLxScriptInfo,
   sourceLabel
 } from './config';
@@ -136,7 +136,6 @@ export class LxSourceManager implements LxTrackUrlResolver, LxSourceLifecycle {
     options: { allowFallback?: boolean } = {}
   ): Promise<TrackUrl | undefined> {
     if (this.stopped || this.sources.size === 0) return undefined;
-    const lxPlatform = mapMusicPlatformToLx(platform);
     const deadline = Date.now() + SOURCE_CHAIN_TIMEOUT_MS;
     const selectedConfigs = new Map<string, LxSourceConfig>();
     createLxSourceConfigs(accountSources).forEach((config) => selectedConfigs.set(config.hash, config));
@@ -146,8 +145,11 @@ export class LxSourceManager implements LxTrackUrlResolver, LxSourceLifecycle {
       const remaining = deadline - Date.now();
       if (remaining <= 0) break;
       const source = this.sources.get(config.hash);
-      const capability = source?.capabilities[lxPlatform];
-      if (!source || !capability) continue;
+      if (!source) continue;
+      const lxPlatform = selectLxPlatform(platform, source.capabilities);
+      if (!lxPlatform) continue;
+      const capability = source.capabilities[lxPlatform];
+      if (!capability) continue;
       const exactQuality = getExactLxQuality(platform, quality, capability.qualities);
       const candidates = options.allowFallback === false
         ? (exactQuality ? [exactQuality] : [])
@@ -163,12 +165,13 @@ export class LxSourceManager implements LxTrackUrlResolver, LxSourceLifecycle {
             musicInfo: {
               id,
               songmid: id,
+              ...(platform === 'kugou' ? { hash: id } : {}),
               ...(lxPlatform === 'tx' ? { strMediaMid: id } : {}),
               source: lxPlatform,
               types: capability.qualities.map((type) => ({ type, size: null }))
             }
           });
-          return mapLxQualityToTrackUrl(validateAudioUrl(result), lxQuality);
+          return mapLxQualityToTrackUrl(validateAudioUrl(result), lxQuality, platform);
         } catch (error) {
           this.log('warn', source.name, config.hash, `获取音频失败: ${safeErrorMessage(error)}`);
         }

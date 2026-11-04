@@ -25,6 +25,7 @@ const Logger = require('../core/Logger');
 const platformFactory = require('../platforms/PlatformFactory');
 const NeteasePlatform = require('../platforms/netease/NeteasePlatform');
 const QQMusicPlatform = require('../platforms/qqmusic/QQMusicPlatform');
+const KugouPlatform = require('../platforms/kugou/KugouPlatform');
 
 const INTERNAL_RESOURCE_ROUTES = new Set(['login/logout', 'login/refresh', 'login/check/expired', 'login/phone/send', 'login/phone/check', 'login/cookie']);
 
@@ -95,6 +96,7 @@ class MultiPlatformServer {
 
       platformFactory.register('netease', NeteasePlatform, { name: 'netease' });
       platformFactory.register('qqmusic', QQMusicPlatform, { name: 'qqmusic' });
+      platformFactory.register('kugou', KugouPlatform);
 
       await platformFactory.initialize();
 
@@ -412,10 +414,14 @@ class MultiPlatformServer {
           existing.lxSource = session.lxSource;
           existing.deviceId = session.deviceId;
           existing.deviceState = session.deviceState;
+          existing.kugouState = session.kugouState;
           if (cookieChanged) {
             // 其他实例更新了 Cookie，旧实例的收藏缓存必须失效。
             existing.favoriteTrackIds.clear();
             existing.userPlaylistIds.clear();
+            existing.kugouPlaylists = undefined;
+            existing.kugouPlaylistsLoading = undefined;
+            existing.playlistFavorites.clear();
             existing.favoriteArtistIds.clear();
             existing.favoriteAlbumIds.clear();
             existing.favoriteArtistsLoaded = false;

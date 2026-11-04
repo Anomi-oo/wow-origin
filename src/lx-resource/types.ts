@@ -18,7 +18,7 @@ export const LX_SOURCE_ENV_KEYS = [
 export const LX_QUALITIES = ['128k', '320k', 'flac', 'flac24bit', 'hires', 'atmos', 'master'] as const;
 
 export type LxQuality = typeof LX_QUALITIES[number];
-export type LxPlatform = 'tx' | 'wy';
+export type LxPlatform = 'tx' | 'wy' | 'kg' | 'kugou';
 export type LxLogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 export interface LxSourceConfig {
@@ -43,6 +43,8 @@ export interface LxPlatformCapability {
 export interface LxSourceCapabilities {
   tx?: LxPlatformCapability;
   wy?: LxPlatformCapability;
+  kg?: LxPlatformCapability;
+  kugou?: LxPlatformCapability;
 }
 
 export interface LxWorkerInitialization {

@@ -10,6 +10,7 @@ import {
   updateAccountCookieByAccessKey
 } from './accounts';
 import type { MusicPlatform } from './types';
+import { kugouEdition, type KugouEdition } from './kugouState';
 import { BadRequestError, UpstreamError } from './errors';
 import { qrCodeDataUrl } from './qr';
 import { preloadSessionFavorites } from './onload';
@@ -27,7 +28,7 @@ import {
 
 const { deviceIdFromIdentity } = require('../platforms/qqmusic/util/android-login');
 
-type ResourcePlatform = 'netease' | 'qqmusic';
+type ResourcePlatform = 'netease' | 'qqmusic' | 'kugou';
 
 interface PlatformFactoryLike {
   getPlatform(name: ResourcePlatform): {
@@ -61,13 +62,14 @@ function normalizeLoginPlatform(value: unknown): MusicPlatform {
   const platform = String(value || '').trim().toLowerCase();
   if (platform === 'qq' || platform === 'qqmusic') return 'qq';
   if (platform === 'netease') return 'netease';
+  if (platform === 'kugou') return 'kugou';
   if (platform === 'ytmusic' || platform === 'youtube-music') return 'ytmusic';
   throw new BadRequestError('不支持的平台');
 }
 
 function toResourcePlatform(platform: MusicPlatform): ResourcePlatform {
   if (platform === 'ytmusic') throw new BadRequestError('YouTube Music 仅支持 Cookie 登录');
-  return platform === 'qq' ? 'qqmusic' : 'netease';
+  return platform === 'qq' ? 'qqmusic' : platform === 'kugou' ? 'kugou' : 'netease';
 }
 
 function serializeCookie(cookie: unknown): string {
@@ -138,6 +140,7 @@ function accountData(session: MusicAccountSession, allowAccountLxSources: boolea
   return {
     apiAccessKey: session.apiAccessKey,
     platform: session.platform,
+    ...(session.platform === 'kugou' ? { kugouEdition: kugouEdition(session.cookie) } : {}),
     name: session.name,
     stateless: session.stateless,
     useLuoxue: session.useLuoxue,
@@ -198,6 +201,8 @@ function normalizeManualCookie(platform: MusicPlatform, value: unknown): Record<
     cookies.uin = (cookies.qqmusic_uin || cookies.musicid || cookies.uin || '').replace(/^o0*/, '');
     cookies.qm_keyst = cookies.qqmusic_key || cookies.musickey || cookies.qm_keyst || '';
     if (!/^[1-9]\d*$/.test(cookies.uin) || !cookies.qm_keyst) throw new BadRequestError('QQ Cookie 缺少账号 ID 或登录凭证');
+  } else if (platform === 'kugou') {
+    if (!/^[1-9]\d*$/.test(cookies.userid || '') || !cookies.token) throw new BadRequestError('酷狗 Cookie 缺少 userid 或 token');
   } else if (platform === 'ytmusic') {
     if (!cookies['__Secure-3PAPISID'] && !cookies.SAPISID) {
       throw new BadRequestError('YouTube Music Cookie 缺少 __Secure-3PAPISID');
@@ -291,18 +296,33 @@ export function createLoginRouter({
 
   function loginTarget(body: any): PendingLogin {
     const mode = normalizeLoginMode(body?.mode);
-    if (mode === 'update') {
-      const session = requireAccount(registry, body?.api_access_key);
-      if (body?.platform !== undefined && normalizeLoginPlatform(body.platform) !== session.platform) {
-        throw new BadRequestError('更新已有账号时不能修改平台');
-      }
-      return { mode, platform: session.platform, apiAccessKey: session.apiAccessKey, createdAt: Date.now() };
+    const session = mode === 'update' ? requireAccount(registry, body?.api_access_key) : undefined;
+    const platform = session?.platform ?? normalizeLoginPlatform(body?.platform);
+    if (session && body?.platform !== undefined && normalizeLoginPlatform(body.platform) !== platform) {
+      throw new BadRequestError('更新已有账号时不能修改平台');
     }
-    return { mode, platform: normalizeLoginPlatform(body?.platform), apiAccessKey: generateAccountAccessKey(registry, storage), createdAt: Date.now() };
+    let edition: KugouEdition | undefined;
+    if (platform === 'kugou') {
+      const savedEdition = session ? kugouEdition(session.cookie) : undefined;
+      const cookieEdition = typeof body?.cookie === 'string' ? parseLoginCookie(body.cookie).KUGOU_API_PLATFORM : undefined;
+      const selected = body?.kugouEdition ?? savedEdition ?? cookieEdition ?? 'standard';
+      if (selected !== 'standard' && selected !== 'lite') throw new BadRequestError('酷狗版本必须是 standard 或 lite');
+      if (savedEdition && selected !== savedEdition) throw new BadRequestError('重新登录须使用账号原有酷狗版本，其他版本请新增账号');
+      if (cookieEdition !== undefined && cookieEdition !== selected) throw new BadRequestError('Cookie 的酷狗版本与所选版本不一致');
+      edition = selected;
+    }
+    return { mode, platform, apiAccessKey: session?.apiAccessKey ?? generateAccountAccessKey(registry, storage), createdAt: Date.now(), ...(edition ? { kugouEdition: edition } : {}) };
+  }
+
+  function kugouLoginCookie(target: PendingLogin, value?: string): string {
+    const fields = parseLoginCookie(value || '');
+    fields.KUGOU_API_PLATFORM = target.kugouEdition || 'standard';
+    return serializeCookie(fields);
   }
 
   async function saveLogin(target: PendingLogin, cookie: string, verifiedName?: string) {
     if (!cookie) throw new UpstreamError('登录成功但未获取到有效 cookie');
+    if (target.platform === 'kugou') cookie = kugouLoginCookie(target, cookie);
     const { mode, platform, apiAccessKey } = target;
     const previousCookie = mode === 'update' ? registry.byAccessKey.get(apiAccessKey)?.cookie : undefined;
     const result = mode === 'update'
@@ -378,7 +398,8 @@ export function createLoginRouter({
 
   router.post('/api/start', async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { mode, platform, apiAccessKey } = loginTarget(req.body);
+      const target = loginTarget(req.body);
+      const { mode, platform, apiAccessKey } = target;
       if (platform === 'ytmusic') throw new BadRequestError('YouTube Music 请使用 Cookie 登录');
 
       const qrType = req.body?.qrType ?? 'qq';
@@ -387,17 +408,17 @@ export function createLoginRouter({
       }
       const existing = mode === 'update' ? registry.byAccessKey.get(apiAccessKey) : undefined;
       const result = await callLoginModule(platformFactory, platform, 'login/qr/key',
-        platform === 'qq' ? { ...existingQqDeviceQuery(existing), qrType } : {});
+        platform === 'qq' ? { ...existingQqDeviceQuery(existing), qrType } : platform === 'kugou' ? { cookie: kugouLoginCookie(target) } : {});
       if (mode === 'update') requireAccount(registry, apiAccessKey);
       const qr = getQrPayload(platform, result);
       const qrImage = qr.qrImage || (qr.qrText
         ? qrCodeDataUrl(qr.qrText)
         : '');
       if (!isValidLoginToken(qr.token)) throw new UpstreamError('登录接口返回了无效的 token');
-      await pendingLogins.set(qr.token, { mode, apiAccessKey, platform, createdAt: Date.now() });
+      await pendingLogins.set(qr.token, { ...target, ...(platform === 'kugou' ? { kugouCookie: serializeCookie(result.cookie) } : {}) });
       res.json({
         code: 200,
-        data: { mode, platform, apiAccessKey, token: qr.token, qrImage, qrText: qr.qrText }
+        data: { mode, platform, apiAccessKey, token: qr.token, qrImage, qrText: qr.qrText, ...(target.kugouEdition ? { kugouEdition: target.kugouEdition } : {}) }
       });
     } catch (error) {
       next(error);
@@ -425,7 +446,7 @@ export function createLoginRouter({
       checking.add(token);
       activeToken = token;
       const { mode, apiAccessKey, platform } = pending;
-      const result = await callLoginModule(platformFactory, platform, 'login/qr/check', { key: token });
+      const result = await callLoginModule(platformFactory, platform, 'login/qr/check', { key: token, ...(pending.platform === 'kugou' ? { cookie: pending.kugouCookie } : {}) });
       const body = result?.body || {};
       const code = Number(body.code || 0);
       const message = String(body.message || body.msg || '');
@@ -467,6 +488,7 @@ export function createLoginRouter({
     try {
       const target = loginTarget(req.body);
       const values = normalizeManualCookie(target.platform, req.body?.cookie);
+      if (target.platform === 'kugou') values.KUGOU_API_PLATFORM = target.kugouEdition!;
       if (target.platform === 'ytmusic') {
         const cookie = serializeCookie(values);
         const profile = await new YTMusicClient(cookie).getUserMe();
@@ -474,10 +496,10 @@ export function createLoginRouter({
         return;
       }
       const result = await callLoginModule(platformFactory, target.platform,
-        target.platform === 'qq' ? 'login/cookie' : 'user/detail', values);
+        target.platform === 'qq' || target.platform === 'kugou' ? 'login/cookie' : 'user/detail', values);
       const profile = result.body || result;
       if (target.platform === 'netease' && !profile.userId) throw new BadRequestError('网易云 Cookie 无效或已过期');
-      res.json({ code: 200, data: await saveLogin(target, serializeCookie(values), String(profile.nickname || '')) });
+      res.json({ code: 200, data: await saveLogin(target, serializeCookie(target.platform === 'kugou' ? result.cookie : values), String(profile.nickname || '')) });
     } catch (error) { next(error); }
   });
 
@@ -487,20 +509,25 @@ export function createLoginRouter({
       const phone = String(req.body?.phone || '').trim();
       const countryCode = String(req.body?.countryCode || '86').trim();
       if (!/^\d{6,15}$/.test(phone) || !/^[1-9]\d{0,3}$/.test(countryCode)) throw new BadRequestError('请输入有效的手机号和区号');
+      if (target.platform === 'kugou' && (countryCode !== '86' || !/^1\d{10}$/.test(phone))) throw new BadRequestError('酷狗短信登录目前仅支持中国大陆手机号');
       const token = String(req.body?.token || '');
+      let kugouCookie: string | undefined;
       if (token) {
         requireLoginToken(token, '手机登录会话已失效，请重新获取验证码');
         const previous = await pendingPhones.get(token);
         if (!previous || Date.now() - previous.createdAt > PHONE_LOGIN_TTL_MS
           || previous.platform !== target.platform || previous.mode !== target.mode
+          || previous.kugouEdition !== target.kugouEdition
           || (target.mode === 'update' && previous.apiAccessKey !== target.apiAccessKey)) {
           throw new BadRequestError('手机登录会话已失效，请重新获取验证码');
         }
         target = previous;
+        kugouCookie = previous.kugouCookie;
       }
       const existing = target.mode === 'update' ? registry.byAccessKey.get(target.apiAccessKey) : undefined;
       const result = await callLoginModule(platformFactory, target.platform, 'login/phone/send', {
         phone, countryCode, token,
+        ...(target.platform === 'kugou' ? { cookie: kugouCookie || kugouLoginCookie(target) } : {}),
         ...(target.platform === 'qq' ? existingQqDeviceQuery(existing) : {})
       });
       if (target.mode === 'update') requireAccount(registry, target.apiAccessKey);
@@ -513,7 +540,7 @@ export function createLoginRouter({
       }
       if (sessionToken) {
         if (!isValidLoginToken(sessionToken)) throw new UpstreamError('手机登录接口返回了无效的 token');
-        await pendingPhones.set(sessionToken, { ...target, captchaUrl });
+        await pendingPhones.set(sessionToken, { ...target, captchaUrl, ...(target.platform === 'kugou' ? { phone, kugouCookie: serializeCookie(result.cookie) } : {}) });
       }
       const responseData = { ...data, token: sessionToken || data.token };
       delete responseData.securityUrl;
@@ -594,7 +621,7 @@ export function createLoginRouter({
       if (checking.has(token)) throw new BadRequestError('正在登录，请稍候');
       checking.add(token);
       active = true;
-      const result = await callLoginModule(platformFactory, pending.platform, 'login/phone/check', { token, code });
+      const result = await callLoginModule(platformFactory, pending.platform, 'login/phone/check', { token, code, ...(pending.platform === 'kugou' ? { phone: pending.phone, cookie: pending.kugouCookie } : {}) });
       const data = await saveLogin(pending, serializeCookie(result.cookie), result.body?.nickname);
       await pendingPhones.delete(token).catch((error) => {
         console.warn('[login] 清理已完成的手机登录会话失败', error);

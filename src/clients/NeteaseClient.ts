@@ -295,7 +295,8 @@ export class NeteaseClient extends MusicClientBase {
     return detail;
   }
 
-  async getUserPlaylist(): Promise<Playlist[]> {
+  private async loadUserPlaylists(): Promise<{ items: Playlist[]; likedPlaylist?: Playlist }> {
+    let likedPlaylist: Playlist | undefined;
     const items: Playlist[] = [];
     const seen = new Set<string>();
     const limit = 1000;
@@ -308,11 +309,17 @@ export class NeteaseClient extends MusicClientBase {
         if (!item.id || seen.has(item.id)) continue;
         seen.add(item.id);
         items.push(item);
+        if (!likedPlaylist && Number(playlist.specialType) === 5 && playlist.subscribed === false) likedPlaylist = item;
       }
       if (raw.more !== true || items.length === previousCount) break;
     }
     this.replaceUserPlaylists(items);
-    return items;
+    return { items, likedPlaylist };
+  }
+
+  async getUserPlaylist(): Promise<Playlist[]> {
+    const { items, likedPlaylist } = await this.loadUserPlaylists();
+    return items.filter(item => item.id !== likedPlaylist?.id);
   }
 
   async userArtists(): Promise<Artist[]> {
@@ -334,8 +341,7 @@ export class NeteaseClient extends MusicClientBase {
   }
 
   async userFavoriteTracks(): Promise<Track[]> {
-    const playlists = await this.getUserPlaylist();
-    const favoritePlaylist = playlists.find((playlist) => /.+喜欢的音乐$/.test(playlist.name));
+    const { likedPlaylist: favoritePlaylist } = await this.loadUserPlaylists();
     if (!favoritePlaylist) {
       this.clearFavoriteTracks();
       return [];

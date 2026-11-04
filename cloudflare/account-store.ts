@@ -19,6 +19,7 @@ const SCHEMA = `
     lx_source TEXT,
     deviceId TEXT,
     device_state TEXT,
+    kugou_state TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
@@ -46,7 +47,8 @@ function values(account: RawMusicAccount): Array<string | null> {
     encode(account.useLuoxue),
     encode(account.lxSource),
     encode(account.deviceId),
-    encode(account.deviceState)
+    encode(account.deviceState),
+    encode(account.kugouState)
   ];
 }
 
@@ -60,6 +62,7 @@ function rowToAccount(row: Record<string, unknown>): RawMusicAccount {
     useLuoxue: decode(row.use_luoxue),
     lxSource: decode(row.lx_source),
     deviceId: decode(row.device_id),
+    kugouState: decode(row.kugou_state),
     deviceState: decode(row.device_state)
   };
 }
@@ -77,19 +80,20 @@ export class DurableObjectAccountStore implements AccountStore {
     const columns = rows(this.sql.exec('PRAGMA table_info(accounts)'));
     if (!columns.some(column => column.name === 'deviceId')) this.sql.exec('ALTER TABLE accounts ADD COLUMN deviceId TEXT');
     if (!columns.some(column => column.name === 'device_state')) this.sql.exec('ALTER TABLE accounts ADD COLUMN device_state TEXT');
+    if (!columns.some(column => column.name === 'kugou_state')) this.sql.exec('ALTER TABLE accounts ADD COLUMN kugou_state TEXT');
   }
 
   list(): RawMusicAccount[] {
     return rows(this.sql.exec(`
-      SELECT id, platform, name, cookie, api_access_key, stateless, use_luoxue, lx_source, deviceId AS device_id, device_state
+      SELECT id, platform, name, cookie, api_access_key, stateless, use_luoxue, lx_source, deviceId AS device_id, device_state, kugou_state
       FROM accounts ORDER BY id ASC
     `)).map(rowToAccount);
   }
 
   insert(account: RawMusicAccount): void {
     this.sql.exec(`
-      INSERT INTO accounts (platform, name, cookie, api_access_key, stateless, use_luoxue, lx_source, deviceId, device_state)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO accounts (platform, name, cookie, api_access_key, stateless, use_luoxue, lx_source, deviceId, device_state, kugou_state)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, ...values(account));
   }
 
@@ -99,14 +103,14 @@ export class DurableObjectAccountStore implements AccountStore {
 
   update(apiAccessKey: string, changes: Partial<RawMusicAccount>): void {
     const row = rows(this.sql.exec(`
-      SELECT id, platform, name, cookie, api_access_key, stateless, use_luoxue, lx_source, deviceId AS device_id, device_state
+      SELECT id, platform, name, cookie, api_access_key, stateless, use_luoxue, lx_source, deviceId AS device_id, device_state, kugou_state
       FROM accounts WHERE api_access_key = ? ORDER BY id ASC LIMIT 1
     `, apiAccessKey))[0];
     if (!row) throw new Error('Cloudflare SQLite 中未找到对应 api_access_key');
     const account = { ...rowToAccount(row), ...changes, api_access_key: apiAccessKey };
     this.sql.exec(`
       UPDATE accounts SET platform = ?, name = ?, cookie = ?, api_access_key = ?,
-        stateless = ?, use_luoxue = ?, lx_source = ?, deviceId = ?, device_state = ?, updated_at = CURRENT_TIMESTAMP
+        stateless = ?, use_luoxue = ?, lx_source = ?, deviceId = ?, device_state = ?, kugou_state = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `, ...values(account), row.id);
   }

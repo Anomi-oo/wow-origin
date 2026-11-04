@@ -233,7 +233,7 @@ describe('login router', () => {
 
     expect(response.text).toContain('扫码登录')
     expect(response.text).toContain('添加新账号')
-    expect(response.text).not.toContain('<button data-method="phone"')
+    expect(response.text).toContain('<button data-method="phone" class="hidden"')
     expect(response.text).toContain('Cookie 登录')
     expect(response.text).toContain('id="login-methods" class="login-methods"')
     expect(response.text).not.toContain('class="segment login-methods"')

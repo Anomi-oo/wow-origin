@@ -326,7 +326,7 @@ describe('QQClient', () => {
         return Promise.resolve({
           code: 200,
           playlist: [
-            { id: 1824599357, name: '我喜欢', trackCount: 2, creator: {} },
+            { id: 1824599357, dirId: 201, name: '我喜欢', trackCount: 2, creator: {} },
             { id: 999, name: '我喜欢', trackCount: 1, creator: {} }
           ]
         })

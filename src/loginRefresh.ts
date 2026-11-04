@@ -21,7 +21,7 @@ export const qqNextLoginCheckAt = new Map<string, number>();
 const qqCheckedCookies = new Map<string, string>();
 const qqLoginChecksInFlight = new Map<string, Promise<void>>();
 
-type ResourcePlatform = 'qqmusic' | 'netease';
+type ResourcePlatform = 'qqmusic' | 'netease' | 'kugou';
 
 interface MusicPlatformLike {
   callModule(route: string, request: any): Promise<any>;
@@ -54,11 +54,11 @@ export interface LoginRefreshScheduler {
 }
 
 function toResourcePlatform(platform: MusicPlatform): ResourcePlatform {
-  return platform === 'qq' ? 'qqmusic' : 'netease';
+  return platform === 'qq' ? 'qqmusic' : platform === 'kugou' ? 'kugou' : 'netease';
 }
 
 function platformDisplayName(platform: MusicPlatform): string {
-  return platform === 'qq' ? 'QQ 音乐' : '网易云音乐';
+  return platform === 'qq' ? 'QQ 音乐' : platform === 'kugou' ? '酷狗音乐' : '网易云音乐';
 }
 
 function parseCookie(cookie: string): Record<string, string> {
@@ -127,6 +127,7 @@ export async function refreshLoginSession(
       result = await platformFactory.getPlatform(resourcePlatform).callModule(LOGIN_REFRESH_ROUTE, {
         query: {
           ...currentCookie,
+          ...(session.platform === 'kugou' ? { cookie: currentCookie } : {}),
           ...(session.deviceState ? { qq_android_identity: session.deviceState } : {}),
           platform: resourcePlatform,
           timestamp: Date.now()
@@ -138,7 +139,7 @@ export async function refreshLoginSession(
     } catch (error) {
       throw new UpstreamError(`${displayName}授权刷新失败: ${(error as Error).message}`);
     }
-    const upstreamCode = Number(result?.body?.code ?? 200);
+    const upstreamCode = session.platform === 'kugou' ? 200 : Number(result?.body?.code ?? 200);
     if (!result || result.code !== 200 || upstreamCode !== 200) {
       throw new UpstreamError(result?.message || result?.body?.message || result?.body?.msg || `${displayName}登录状态已过期，请重新登录`);
     }

@@ -153,7 +153,7 @@ describe('artist and album favorites', () => {
     const likedName = platform === 'QQ' ? '我喜欢' : '我喜欢的音乐'
     const callModule = jest.fn((route) => {
       if (route === 'user/playlist') {
-        return Promise.resolve({ code: 200, playlist: [{ id: 100 + phase, name: likedName, trackCount: 1 }], more: false })
+        return Promise.resolve({ code: 200, playlist: [{ id: 100 + phase, name: likedName, trackCount: 1, subscribed: false, ...(platform === 'QQ' ? { dirId: 201 } : { specialType: 5 }) }], more: false })
       }
       if (route === 'playlist/detail') {
         const song = { id: `track-${phase}`, mid: `track-${phase}`, name: '歌曲', ar: [], al: {} }

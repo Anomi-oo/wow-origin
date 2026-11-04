@@ -1,6 +1,7 @@
 const { createAdapter, createMusicClient, createWowContextResolver } = require('../../dist/adapter')
 const { QQClient } = require('../../dist/clients/QQClient')
 const { NeteaseClient } = require('../../dist/clients/NeteaseClient')
+const { KugouClient } = require('../../dist/clients/KugouClient')
 
 describe('Wow adapter', () => {
   afterEach(() => {
@@ -11,6 +12,36 @@ describe('Wow adapter', () => {
   test('创建对应 client', () => {
     expect(createMusicClient('qq', 'cookie')).toBeInstanceOf(QQClient)
     expect(createMusicClient('netease', 'cookie')).toBeInstanceOf(NeteaseClient)
+    expect(createMusicClient('kugou', 'cookie')).toBeInstanceOf(KugouClient)
+  })
+
+  test.each(['', 'userid=1; token=account'])('酷狗优先使用洛雪，不先请求官方详情或授权（cookie=%s）', async cookie => {
+    const hash = 'a'.repeat(32)
+    const result = { url: 'https://lx.test/song.flac', quality: 'hires', format: '', bitrate: null, size: 0 }
+    const official = jest.spyOn(KugouClient.prototype, 'getTrackUrlForQuality')
+    const detail = jest.spyOn(KugouClient.prototype, 'getTrackDetail')
+    const lxResolver = { resolveTrackUrl: jest.fn().mockResolvedValue(result) }
+    const sources = ['https://source.test/kugou.js']
+    const adapter = createAdapter({ platform: 'kugou', cookie, useLuoxue: true, lxSource: sources }, lxResolver)
+    await expect(adapter.getTrackUrl(hash, 'hires')).resolves.toEqual(result)
+    expect(lxResolver.resolveTrackUrl).toHaveBeenCalledWith('kugou', hash, 'hires', sources, { allowFallback: false })
+    expect(official).not.toHaveBeenCalled()
+    expect(detail).not.toHaveBeenCalled()
+  })
+
+  test.each(['missing', 'invalid', 'error', 'disabled'])('酷狗洛雪源 %s 时使用官方同档位', async mode => {
+    const hash = 'a'.repeat(32)
+    const result = { url: 'https://official.test/song.mp3', quality: 'exhigh', format: 'mp3', bitrate: 320000, size: 0 }
+    const official = jest.spyOn(KugouClient.prototype, 'getTrackUrlForQuality').mockResolvedValue(result)
+    jest.spyOn(console, 'warn').mockImplementation(() => {})
+    const lxResolver = { resolveTrackUrl: jest.fn(async () => {
+      if (mode === 'error') throw new Error('LX failed')
+      return mode === 'invalid' ? { url: '' } : undefined
+    }) }
+    const adapter = createAdapter({ platform: 'kugou', cookie: 'userid=1', useLuoxue: mode !== 'disabled' }, lxResolver)
+    await expect(adapter.getTrackUrl(hash, 'exhigh')).resolves.toEqual(result)
+    expect(official).toHaveBeenCalledWith(hash, 'exhigh')
+    expect(lxResolver.resolveTrackUrl).toHaveBeenCalledTimes(mode === 'disabled' ? 0 : 1)
   })
 
   test('根据账号创建 SDK Adapter', () => {
@@ -159,10 +190,11 @@ describe('Wow adapter', () => {
 
   test.each([
     ['netease', NeteaseClient, 'master', 'hires'],
-    ['qq', QQClient, 'lossless', 'exhigh']
+    ['qq', QQClient, 'lossless', 'exhigh'],
+    ['kugou', KugouClient, 'hires', 'lossless']
   ])('%s 两种来源都失败后按歌曲音质表降级，并再次尝试洛雪源', async (platform, Client, requested, lower) => {
     const events = []
-    const trackId = platform === 'netease' ? '123' : 'track-1'
+    const trackId = platform === 'netease' ? '123' : platform === 'kugou' ? 'a'.repeat(32) : 'track-1'
     const officialSpy = jest.spyOn(Client.prototype, 'getTrackUrlForQuality').mockImplementation(async (_id, quality) => {
       events.push(`official:${quality}`)
       throw new Error('official unavailable')

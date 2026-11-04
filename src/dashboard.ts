@@ -1,3 +1,4 @@
+import { kugouEdition } from './kugouState';
 import os from 'node:os';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { deleteAccount } from './accounts';
@@ -142,6 +143,7 @@ export function createDashboardRouter(options: {
       code: 200,
       data: options.registry.sessions.map((session) => ({
         platform: session.platform,
+        ...(session.platform === 'kugou' ? { kugouEdition: kugouEdition(session.cookie) } : {}),
         name: session.name,
         apiAccessKey: session.apiAccessKey
       }))

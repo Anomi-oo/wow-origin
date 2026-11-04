@@ -58,12 +58,14 @@ function normalizeInitialization(
   const sources = info.sources as Record<string, unknown>;
   const capabilities: LxSourceCapabilities = {
     tx: normalizeCapability(sources.tx),
-    wy: normalizeCapability(sources.wy)
+    wy: normalizeCapability(sources.wy),
+    kg: normalizeCapability(sources.kg),
+    kugou: normalizeCapability(sources.kugou)
   };
-  if (!capabilities.tx && !capabilities.wy) {
-    throw new Error('LX source has no usable tx or wy capability');
+  if (!Object.values(capabilities).some(Boolean)) {
+    throw new Error('LX source has no usable tx, wy, kg or kugou capability');
   }
-  const fallbackName = [sources.tx, sources.wy]
+  const fallbackName = [sources.tx, sources.wy, sources.kg, sources.kugou]
     .map((source) => source && typeof source === 'object'
       ? (source as { name?: unknown }).name
       : undefined)

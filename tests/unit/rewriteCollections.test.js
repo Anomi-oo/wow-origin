@@ -39,7 +39,7 @@ test('代理重取四类用户列表后持久化替换旧 ID', async () => {
   let phase = 1
   const callModule = jest.fn((route) => {
     if (route === 'user/playlist') {
-      return Promise.resolve({ code: 200, playlist: [{ id: 100 + phase, name: '我喜欢' }] })
+      return Promise.resolve({ code: 200, playlist: [{ id: 100 + phase, dirId: 201, name: '我喜欢' }] })
     }
     if (route === 'playlist/detail') {
       return Promise.resolve({ code: 200, playlist: {

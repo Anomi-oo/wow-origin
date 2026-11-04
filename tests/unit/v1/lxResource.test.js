@@ -144,6 +144,7 @@ describe('LX resource', () => {
           actions: ['musicUrl'],
           qualities: ['128k', '320k', 'flac']
         },
+        kg: { actions: ['musicUrl'], qualities: ['320k'] },
         wy: {
           actions: ['musicUrl'],
           qualities: ['128k', '320k']
@@ -159,6 +160,38 @@ describe('LX resource', () => {
     } finally {
       await runtime.terminate()
     }
+  })
+
+  test.each(['kg', 'kugou'])('仅声明 %s 的源能注册并收到正确标识和酷狗 hash', async alias => {
+    const url = `https://source.test/${alias}.js`
+    const hash = 'a'.repeat(32)
+    const script = createSourceScript('酷狗源', `(() => {
+      if (source !== '${alias}' || info.musicInfo.source !== source || info.musicInfo.hash !== '${hash}' || info.musicInfo.songmid !== '${hash}') throw new Error('wrong Kugou payload')
+      return 'https://audio.test/' + source + '/' + info.musicInfo.hash + '/' + info.type
+    })()`, [alias]).replace("qualitys: ['128k', '320k', 'flac']", "qualitys: ['128k', '320k', 'flac', 'flac24bit']")
+    const cacheDirectory = path.join(temporaryDirectory, alias)
+    await fs.mkdir(cacheDirectory)
+    await fs.writeFile(getLxSourceCachePath(cacheDirectory, md5(url)), script)
+    const manager = new LxSourceManager({ configs: [{ url, hash: md5(url), order: 0 }], cacheDirectory })
+    try {
+      manager.start()
+      await manager.waitForInitialLoad()
+      for (const [quality, type] of [['standard', '128k'], ['exhigh', '320k'], ['lossless', 'flac'], ['hires', 'flac24bit']]) {
+        await expect(manager.resolveTrackUrl('kugou', hash, quality, [], { allowFallback: false })).resolves.toMatchObject({
+          url: `https://audio.test/${alias}/${hash}/${type}`, quality
+        })
+      }
+      await expect(manager.resolveTrackUrl('qq', hash, 'exhigh')).resolves.toBeUndefined()
+    } finally {
+      await manager.stop()
+    }
+  })
+
+  test('酷狗 Hi-Res 精确映射 24bit，兼容声明 hires，并且不将无损冒充 Hi-Res', () => {
+    expect(getExactLxQuality('kugou', 'hires', ['flac', 'flac24bit'])).toBe('flac24bit')
+    expect(getExactLxQuality('kugou', 'hires', ['flac', 'hires'])).toBe('hires')
+    expect(getExactLxQuality('kugou', 'hires', ['flac'])).toBeUndefined()
+    expect(getLxQualityCandidates('hires', ['flac24bit', 'flac', '320k'], 'kugou')).toEqual(['flac24bit', 'flac', '320k'])
   })
 
   test('Worker 的 lx.request 提供官方响应结构', async () => {

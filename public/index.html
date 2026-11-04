@@ -85,8 +85,10 @@
             <div id="platform-switch" class="segment">
               <button data-platform="qq" type="button">QQ 音乐</button>
               <button data-platform="netease" type="button">网易云音乐</button>
+              <button data-platform="kugou" type="button">酷狗音乐</button>
               <button data-platform="ytmusic" type="button">YouTube Music</button>
             </div>
+            <label id="kugou-edition-field" class="field hidden"><span>酷狗版本</span><select id="kugou-edition"><option value="standard">酷狗音乐标准版</option><option value="lite">酷狗概念版</option></select></label>
             <div id="qr-login-panel">
               <div class="qr-frame login-qr">
                 <img id="login-qr" alt="账号登录二维码">
@@ -120,6 +122,7 @@
                 <button data-qr-type="mobile" type="button">QQ 音乐</button>
               </div>
               <button data-method="qr" class="hidden" type="button">扫码登录</button>
+              <button data-method="phone" class="hidden" type="button">短信登录</button>
               <button data-method="cookie" type="button">Cookie 登录</button>
             </div>
             <div class="button-row">

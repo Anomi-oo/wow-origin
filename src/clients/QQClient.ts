@@ -276,12 +276,19 @@ export class QQClient extends MusicClientBase {
     return detail;
   }
 
-  async getUserPlaylist(): Promise<Playlist[]> {
+  private async loadUserPlaylists(): Promise<{ items: Playlist[]; likedPlaylist?: Playlist }> {
     const result = await this.call('user_playlist', { uin: this.uin });
-    const playlists = result.playlist || [];
-    const items = playlists.map((item: any) => mapPlaylist(item));
+    const playlists: any[] = result.playlist || [];
+    const liked = playlists.find(item => Number(item.dirId) === 201 && item.subscribed !== true
+      && (!String(item.creator?.userId || item.userId || '') || String(item.creator?.userId || item.userId) === this.uin));
+    const items = playlists.map(item => mapPlaylist(item));
     this.replaceUserPlaylists(items);
-    return items;
+    return { items, likedPlaylist: liked ? mapPlaylist(liked) : undefined };
+  }
+
+  async getUserPlaylist(): Promise<Playlist[]> {
+    const { items, likedPlaylist } = await this.loadUserPlaylists();
+    return items.filter(item => item.id !== likedPlaylist?.id);
   }
 
   async userArtists(): Promise<Artist[]> {
@@ -303,8 +310,7 @@ export class QQClient extends MusicClientBase {
   }
 
   async userFavoriteTracks(): Promise<Track[]> {
-    const playlists = await this.getUserPlaylist();
-    const favoritePlaylist = playlists.find((playlist) => playlist.name === '我喜欢');
+    const { likedPlaylist: favoritePlaylist } = await this.loadUserPlaylists();
     if (!favoritePlaylist) {
       this.clearFavoriteTracks();
       return [];
