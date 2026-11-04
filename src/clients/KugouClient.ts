@@ -34,6 +34,13 @@ export class KugouClient extends MusicClientBase {
       return this.withFavoriteTrack(track);
     }).filter(track => /^[a-f0-9]{32}$/.test(track.id));
   }
+  protected override withFavoriteTrack<T extends Track>(track: T): T {
+    return {
+      ...super.withFavoriteTrack(track),
+      artists: this.withFavoriteArtists(track.artists),
+      album: this.withFavoriteAlbums([track.album])[0]
+    };
+  }
   private hash(id: string): string {
     if (!/^[a-f0-9]{32}$/i.test(id)) throw new BadRequestError('酷狗歌曲 ID 必须是音频 hash');
     return id.toLowerCase();
@@ -285,7 +292,7 @@ export class KugouClient extends MusicClientBase {
       return { songs: songs.items, artists: artists.items, albums: albums.items };
     }
     const suggested = (key: string): any[] => rows(response[key]?.[0]?.RecordDatas ?? response[key]?.RecordDatas ?? response[key]);
-    return { songs: this.tracks(suggested('Song')), artists: suggested('Singer').map(mapArtist), albums: suggested('Album').map(mapAlbum) };
+    return { songs: this.tracks(suggested('Song')), artists: this.withFavoriteArtists(suggested('Singer').map(mapArtist)), albums: this.withFavoriteAlbums(suggested('Album').map(mapAlbum)) };
   }
   async getArtistDetail(id: string, trackLimit = -1): Promise<ArtistDetail> {
     const response = await this.call('artist/detail', { id });
@@ -301,7 +308,7 @@ export class KugouClient extends MusicClientBase {
     const raw = rows(response)[0] ?? dataOf(response);
     const album = mapAlbum(raw);
     const tracks = trackLimit === 0 ? [] : trackLimit === -1 ? this.tracks(await this.allRows('album/songs', { id })) : (await this.page('album/songs', { id }, 0, trackLimit, raw => this.tracks(raw), 30)).items;
-    return { ...album, id, favorite: this.hasFavoriteAlbum(id), description: text(raw.intro), artist: rows(raw.authors).map(mapArtist)[0], tracks };
+    return { ...album, id, favorite: this.hasFavoriteAlbum(id), description: text(raw.intro), artist: this.withFavoriteArtists(rows(raw.authors).map(mapArtist))[0], tracks };
   }
   async getUserMe(): Promise<UserProfile> {
     const response = await this.call('user/detail');
