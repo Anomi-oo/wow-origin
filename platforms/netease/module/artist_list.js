@@ -19,14 +19,14 @@
 
 module.exports = (query, request) => {
   const data = {
-    initial: isNaN(query.initial)
+    initial: query.initial == null ? -1 : isNaN(query.initial)
       ? (query.initial || '').toUpperCase().charCodeAt() || undefined
       : query.initial,
-    offset: query.offset || 0,
-    limit: query.limit || 30,
+    offset: query.offset ?? 0,
+    limit: query.limit ?? 30,
     total: true,
-    type: query.type || '1',
-    area: query.area,
+    type: query.type ?? -1,
+    area: query.area ?? -1,
   }
   return request(`/api/v1/artist/list`, data, { 
     crypto: "weapi",

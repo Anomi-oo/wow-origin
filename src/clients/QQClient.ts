@@ -105,6 +105,12 @@ export class QQClient extends MusicClientBase {
     return this.withFavoriteArtists(artists.map((item: any) => mapArtist(item)));
   }
 
+  async getArtists(offset: number, limit: number): Promise<ArtistPage> {
+    const raw = await this.call('artist_list', { offset, limit, type: -100, area: -100, initial: -100, genre: -100 });
+    const items = this.withFavoriteArtists((raw.artists || []).map((item: any) => mapArtist(item)));
+    return { items, offset, limit, hasMore: raw.more === true };
+  }
+
   async getRecommendedPlaylist(offset: number, limit: number): Promise<PlaylistPage> {
     const result = await this.call('personalized', { offset, limit });
     const items = (result.result || []).map((item: any) => this.playlistFavorites.apply(mapPlaylist(item)));

@@ -115,6 +115,12 @@ export class NeteaseClient extends MusicClientBase {
     return this.withFavoriteArtists(artists.map((item: any) => mapArtist(item)));
   }
 
+  async getArtists(offset: number, limit: number): Promise<ArtistPage> {
+    const raw = await this.call('artist_list', { offset, limit, type: -1, area: -1, initial: -1 });
+    const items = this.withFavoriteArtists((raw.artists || []).map((item: any) => mapArtist(item)));
+    return { items, offset, limit, hasMore: raw.more === true };
+  }
+
   async getRecommendedPlaylist(offset: number, limit: number): Promise<PlaylistPage> {
     const raw = await this.call('personalized', { offset, limit });
     const items = (raw.result || raw.playlists || []).map((item: any) => this.playlistFavorites.apply(mapPlaylist(item)));

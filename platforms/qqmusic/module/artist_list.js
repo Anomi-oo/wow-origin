@@ -1,110 +1,33 @@
-// 歌手分类列表
-// QQ音乐平台实现
+// QQ 上游固定每页 80 位艺人；按上游页边界取数，再截取请求范围。
+const PAGE_SIZE = 80
 
-const { default: axios } = require('axios')
-
-/**
- * QQ音乐歌手列表接口
- *
- * 参数说明（前端已处理映射，后端直接接收QQ音乐格式参数）：
- * - type: -100(全部), 0(男), 1(女), 2(组合)
- * - area: -100(全部), 200(内地), 2(港台), 5(欧美), 4(日本), 3(韩国), 6(其他)
- * - initial: -100(热门), 1-26(A-Z), 27(#)
- * - genre: -100(全部), 1(流行), 2(摇滚), 3(民谣), 等... (QQ音乐特有)
- */
-module.exports = (query, request) => {
-  // ========== 参数处理 ==========
-
-  // 基础参数（直接使用前端传入的QQ音乐格式参数）
-  const sex = parseInt(query.type ?? -100)      // type -> sex
-  const area = parseInt(query.area ?? -100)
-  const index = parseInt(query.initial ?? -100) // initial -> index
-  const genre = parseInt(query.genre ?? -100)   // QQ音乐特有的流派参数
-
-  // 分页参数
-  const limit = Math.min(parseInt(query.limit) || 80, 100) // 限制最大100
+module.exports = async (query, request) => {
+  const limit = Math.min(parseInt(query.limit) || 20, 100)
   const offset = parseInt(query.offset) || 0
-  const sin = offset                               // QQ音乐使用sin表示偏移量
-  const cur_page = Math.floor(offset / limit) + 1  // 当前页码（从1开始）
+  const start = Math.floor(offset / PAGE_SIZE) * PAGE_SIZE
+  const singers = []
+  let total = 0
 
-  // ========== 构建请求数据 ==========
-
-  const requestData = {
-    comm: {
-      cv: 0,
-      ct: 20
-    },
-    singerList: {
-      module: "Music.SingerListServer",
-      method: "get_singer_list",
-      param: {
-        area: area,
-        sex: sex,
-        genre: genre,
-        index: index,
-        sin: sin,
-        cur_page: cur_page
-      }
+  for (let sin = start; sin < offset + limit; sin += PAGE_SIZE) {
+    const response = await request('Music.SingerListServer', 'get_singer_list', {
+      area: Number(query.area ?? -100),
+      sex: Number(query.type ?? -100),
+      genre: Number(query.genre ?? -100),
+      index: Number(query.initial ?? -100),
+      sin,
+      cur_page: Math.floor(sin / PAGE_SIZE) + 1
+    }, { uin: 0, qm_keyst: '', keepEnvelope: true })
+    const result = response.body?.req_0
+    if (response.body?.code !== 0 || result?.code !== 0 || !Array.isArray(result.data?.singerlist)) {
+      throw new Error('QQ Music artist list request failed')
     }
+    total = Number(result.data.total) || 0
+    singers.push(...result.data.singerlist)
+    if (sin + PAGE_SIZE >= total || result.data.singerlist.length < PAGE_SIZE) break
   }
 
-  // 构建完整URL（使用GET请求）
-  const baseUrl = 'https://u.y.qq.com/cgi-bin/musicu.fcg'
-
-  // 手动构建URL参数，不使用URLSearchParams以避免过度编码
-  const queryParams = {
-    g_tk: '5381',
-    loginUin: '',
-    hostUin: '0',
-    format: 'json',
-    inCharset: 'GB2312',
-    outCharset: 'GB2312',
-    notice: '0',
-    platform: 'pcweb',
-    needNewCode: '0',
-    data: JSON.stringify(requestData)
-  }
-
-  // 手动拼接URL，对data参数使用encodeURIComponent
-  const url = `${baseUrl}?g_tk=${queryParams.g_tk}&loginUin=${queryParams.loginUin}&hostUin=${queryParams.hostUin}&format=${queryParams.format}&inCharset=${queryParams.inCharset}&outCharset=${queryParams.outCharset}&notice=${queryParams.notice}&platform=${queryParams.platform}&needNewCode=${queryParams.needNewCode}&data=${encodeURIComponent(queryParams.data)}`
-
-  // ========== 发送请求 ==========
-
-  return axios.get(url, {
-    timeout: 10000,
-    headers: {
-      'Referer': 'https://y.qq.com/',
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
-    }
-  }).then(response => {
-    // 检查响应
-    if (!response.data || response.data.code !== 0) {
-      throw new Error(response.data?.message || 'QQ Music API error')
-    }
-
-    // 提取歌手列表数据
-    const singerListData = response.data.singerList?.data || {}
-    const singerlist = singerListData.singerlist || []
-    const total = singerListData.total || 0
-
-    // ========== 格式化响应数据 ==========
-
-    return {
-      artists: singerlist.map(formatArtist),
-      more: (offset + limit) < total,
-      total: total
-    }
-
-  }).catch(error => {
-    // 错误处理
-    if (error.response) {
-      throw new Error(`QQ Music API error: ${error.response.status}`)
-    } else if (error.request) {
-      throw new Error('QQ Music API network error')
-    } else {
-      throw error
-    }
-  })
+  const artists = singers.slice(offset - start, offset - start + limit).map(formatArtist)
+  return { artists, more: offset + artists.length < total, total }
 }
 
 /**
