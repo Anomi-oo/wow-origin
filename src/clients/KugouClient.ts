@@ -228,6 +228,15 @@ export class KugouClient extends MusicClientBase {
       listid = await this.likedId();
       raw = await this.allRows('playlist/track/all/new', { listid });
     }
+    // Cloud pages need not follow the saved display order. Sort globally after
+    // loading every page; retain upstream order for ties or missing positions.
+    const position = (row: any): number => {
+      const value = row.sort;
+      if (typeof value !== 'number' && (typeof value !== 'string' || !value.trim())) return Infinity;
+      const number = Number(value);
+      return Number.isFinite(number) ? number : Infinity;
+    };
+    raw.sort((left, right) => position(left) - position(right));
     const tracks = this.tracks(raw);
     this.clearFavoriteTracks(); tracks.forEach(track => this.addFavoriteTrack(track.id));
     return this.withFavoriteTracks(tracks);
