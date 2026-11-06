@@ -2,6 +2,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { DatabaseSync, StatementSync } from 'node:sqlite';
 import type { RawMusicAccount } from '../accounts';
+import {
+  ACCOUNT_SCHEMA_SQL, SCALAR_ACCOUNT_MIGRATION, MIGRATE_ACCOUNT_SCALARS_SQL,
+  accountValues, rowToAccount, type StoredAccountRow
+} from './sqliteAccountSchema';
 
 export interface AccountStore {
   readonly location: string;
@@ -13,87 +17,6 @@ export interface AccountStore {
   flush?(): Promise<void>;
   /** 重新读取底层存储；数据没有变化时返回 false。 */
   reload?(): Promise<boolean | void>;
-}
-
-type StoredAccountRow = {
-  id: number;
-  platform: string | null;
-  name: string | null;
-  cookie: string | null;
-  api_access_key: string | null;
-  stateless: string | null;
-  use_luoxue: string | null;
-  lx_source: string | null;
-  device_id: string | null;
-  device_state: string | null;
-  kugou_state: string | null;
-};
-
-const SCHEMA = `
-  CREATE TABLE IF NOT EXISTS accounts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    platform TEXT,
-    name TEXT,
-    cookie TEXT,
-    api_access_key TEXT,
-    stateless TEXT,
-    use_luoxue TEXT,
-    lx_source TEXT,
-    deviceId TEXT,
-    device_state TEXT,
-    kugou_state TEXT,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-  );
-  CREATE INDEX IF NOT EXISTS accounts_access_key_idx ON accounts(api_access_key);
-  PRAGMA user_version = 2;
-`;
-
-function encode(value: unknown): string | null {
-  return value === undefined ? null : JSON.stringify(value);
-}
-
-function decode(value: string | null): unknown {
-  if (value === null) return undefined;
-  try {
-    return JSON.parse(value);
-  } catch {
-    return undefined;
-  }
-}
-
-function accountValues(account: RawMusicAccount): Array<string | null> {
-  return [
-    encode(account.platform),
-    encode(account.name),
-    encode(account.cookie),
-    typeof account.api_access_key === 'string'
-      ? account.api_access_key
-      : account.api_access_key === undefined
-        ? null
-        : String(account.api_access_key),
-    encode(account.stateless),
-    encode(account.useLuoxue),
-    encode(account.lxSource),
-    encode(account.deviceId),
-    encode(account.deviceState),
-    encode(account.kugouState)
-  ];
-}
-
-function rowToAccount(row: StoredAccountRow): RawMusicAccount {
-  return {
-    platform: decode(row.platform),
-    name: decode(row.name),
-    cookie: decode(row.cookie),
-    api_access_key: row.api_access_key ?? undefined,
-    stateless: decode(row.stateless),
-    useLuoxue: decode(row.use_luoxue),
-    lxSource: decode(row.lx_source),
-    deviceId: decode(row.device_id),
-    kugouState: decode(row.kugou_state),
-    deviceState: decode(row.device_state)
-  };
 }
 
 export function sqliteAccountsFilePath(workDir: string = process.cwd()): string {
@@ -126,7 +49,7 @@ export class SqliteAccountStore implements AccountStore {
     const { DatabaseSync: SqliteDatabase } = require('node:sqlite') as typeof import('node:sqlite');
     this.database = new SqliteDatabase(this.location);
     this.database.exec('PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;');
-    this.database.exec(SCHEMA);
+    this.database.exec(ACCOUNT_SCHEMA_SQL);
     const columns = this.database.prepare('PRAGMA table_info(accounts)').all() as Array<{ name: string }>;
     if (!columns.some(column => column.name === 'deviceId')) this.database.exec('ALTER TABLE accounts ADD COLUMN deviceId TEXT');
     if (!columns.some(column => column.name === 'device_state')) this.database.exec('ALTER TABLE accounts ADD COLUMN device_state TEXT');
@@ -136,7 +59,7 @@ export class SqliteAccountStore implements AccountStore {
         platform, name, cookie, api_access_key, stateless, use_luoxue, lx_source, deviceId, device_state, kugou_state
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    this.database.exec('CREATE TABLE IF NOT EXISTS account_migrations (name TEXT PRIMARY KEY)');
+    this.migrateScalarColumns();
     if (!this.database.prepare('SELECT name FROM account_migrations WHERE name = ?').get('legacy-json')) {
       this.migrateLegacyAccounts(workDir);
       this.database.prepare('INSERT INTO account_migrations (name) VALUES (?)').run('legacy-json');
@@ -182,6 +105,20 @@ export class SqliteAccountStore implements AccountStore {
 
   close(): void {
     this.database.close();
+  }
+
+  private migrateScalarColumns(): void {
+    this.database.exec('BEGIN IMMEDIATE');
+    try {
+      if (!this.database.prepare('SELECT name FROM account_migrations WHERE name = ?').get(SCALAR_ACCOUNT_MIGRATION)) {
+        this.database.exec(MIGRATE_ACCOUNT_SCALARS_SQL);
+        this.database.prepare('INSERT INTO account_migrations (name) VALUES (?)').run(SCALAR_ACCOUNT_MIGRATION);
+      }
+      this.database.exec('PRAGMA user_version = 3; COMMIT');
+    } catch (error) {
+      this.database.exec('ROLLBACK');
+      throw error;
+    }
   }
 
   private migrateLegacyAccounts(workDir: string): void {
