@@ -20,8 +20,10 @@ beforeEach(() => jest.spyOn(console, 'log').mockImplementation(() => {}));
 function storeAccount(state) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wow-kugou-'));
   const store = createLocalAccountStore(dir); stores.push(store);
-  store.insert({ platform: 'kugou', cookie: 'userid=1; token=old', api_access_key: 'key', stateless: false, kugouState: state });
-  return { store, registry: loadAccountSessions(store), dir };
+  store.insert({ platform: 'kugou', cookie: 'userid=1; token=old', api_access_key: 'key', stateless: false });
+  const registry = loadAccountSessions(store);
+  registry.sessions[0].kugouState = state;
+  return { store, registry, dir };
 }
 function mockRoutes(handlers) {
   const call = jest.fn(async (route, req) => {
@@ -34,14 +36,20 @@ function mockRoutes(handlers) {
 }
 afterEach(() => { jest.restoreAllMocks(); delete global.__musicPlatformFactory__; while (stores.length) stores.pop().close(); });
 
-test('discovers the liked list once and persists it across a store/client restart', async () => {
+test('clients share the liked list in memory and a session restart rediscovers it without database writes', async () => {
   const { store, registry, dir } = storeAccount();
+  const update = jest.spyOn(store, 'update');
   const call = mockRoutes({ 'user/playlist': () => ({ data: { info: [liked] } }), 'playlist/track/all/new': () => ({ data: { info: [song] } }) });
   expect((await createAdapter(registry.sessions[0]).userFavoriteTracks())[0]).toMatchObject({ id: hash, favorite: true });
-  expect(store.list()[0].kugouState).toEqual({ userId: '1', likedPlaylistId: '42' });
-  const reopened = createLocalAccountStore(dir); stores.push(reopened);
-  await createAdapter(loadAccountSessions(reopened).sessions[0]).userFavoriteTracks();
+  expect(registry.sessions[0].kugouState).toEqual({ userId: '1', likedPlaylistId: '42' });
+  await createAdapter(registry.sessions[0]).userFavoriteTracks();
   expect(call.mock.calls.filter(([route]) => route === 'user/playlist')).toHaveLength(1);
+  expect(store.list()[0]).not.toHaveProperty('kugouState');
+  const reopened = createLocalAccountStore(dir); stores.push(reopened);
+  expect(loadAccountSessions(reopened).sessions[0].kugouState).toBeUndefined();
+  await createAdapter(loadAccountSessions(reopened).sessions[0]).userFavoriteTracks();
+  expect(call.mock.calls.filter(([route]) => route === 'user/playlist')).toHaveLength(2);
+  expect(update).not.toHaveBeenCalled();
 });
 
 test.each([
@@ -65,7 +73,7 @@ test.each([
   expect(call).toHaveBeenCalledWith('playlist/track/all/new', expect.objectContaining({ query: expect.objectContaining({ listid: expectedId }) }));
 });
 
-test('My Playlists refresh corrects a previously saved default ID and reuses the liked ID after restart', async () => {
+test('My Playlists refresh corrects a cached default ID and liked-list discovery restarts with a new session', async () => {
   const { store, registry, dir } = storeAccount({ userId: '1', likedPlaylistId: '41' });
   const call = mockRoutes({
     'user/playlist': () => [{ listid: 41, name: '默认收藏', is_def: 1 }, { ...liked, is_def: undefined }],
@@ -76,11 +84,12 @@ test('My Playlists refresh corrects a previously saved default ID and reuses the
   await client.getUserPlaylist();
   await client.userFavoriteTracks();
   await client.favoriteTrack(hash, true);
-  expect(store.list()[0].kugouState).toEqual({ userId: '1', likedPlaylistId: '42' });
+  expect(registry.sessions[0].kugouState).toEqual({ userId: '1', likedPlaylistId: '42' });
+  expect(store.list()[0]).not.toHaveProperty('kugouState');
   expect(call).toHaveBeenCalledWith('playlist/tracks/add', expect.objectContaining({ query: expect.objectContaining({ listid: '42' }) }));
   const reopened = createLocalAccountStore(dir); stores.push(reopened);
   await createAdapter(loadAccountSessions(reopened).sessions[0]).userFavoriteTracks();
-  expect(call.mock.calls.filter(([route]) => route === 'user/playlist')).toHaveLength(1);
+  expect(call.mock.calls.filter(([route]) => route === 'user/playlist')).toHaveLength(2);
 });
 
 test('same-user token refresh keeps the liked ID; switching userid clears it and all favorite caches', async () => {
@@ -89,12 +98,11 @@ test('same-user token refresh keeps the liked ID; switching userid clears it and
   const session = registry.sessions[0];
   updateAccountCookieByAccessKey('key', 'kugou', 'userid=1; token=new', registry, store);
   expect(session.kugouState).toEqual(state);
-  expect(store.list()[0].kugouState).toEqual(state);
+  expect(store.list()[0]).not.toHaveProperty('kugouState');
   session.favoriteTrackIds.add(hash); session.kugouPlaylists = [liked];
   updateAccountCookieByAccessKey('key', 'kugou', 'userid=2; token=other', registry, store);
   expect(session.kugouState).toBeUndefined(); expect(session.kugouPlaylists).toBeUndefined();
   expect(session.favoriteTrackIds.size).toBe(0); expect(store.list()[0].kugouState).toBeUndefined();
-  await expect(session.saveKugouState(state)).rejects.toThrow('账号已变更');
 });
 
 test('Kugou defaults to enabling LX, preserves explicit opt-out, and saves account source settings', async () => {
@@ -125,7 +133,7 @@ test('parallel favorites reads share discovery; stale in-flight discovery cannot
 });
 
 test('transport errors retain the saved list ID; only a confirmed deleted list triggers rediscovery', async () => {
-  const context = { kugouState: { userId: '1', likedPlaylistId: '42' }, saveKugouState: jest.fn(async () => {}) };
+  const context = { kugouState: { userId: '1', likedPlaylistId: '42' } };
   const callModule = jest.fn(async (route, { query }) => {
     if (route === 'user/playlist') return { code: 200, body: { data: [ { ...liked, listid: 43 } ] } };
     if (query.listid === '43') return { code: 200, body: [song] };
@@ -144,7 +152,8 @@ test('refreshing My Playlists clears a missing liked ID and never picks an arbit
   const { store, registry } = storeAccount({ userId: '1', likedPlaylistId: '42' });
   mockRoutes({ 'user/playlist': () => [{ listid: 45, name: '我喜欢的摇滚', list_create_userid: '1' }] });
   const client = createAdapter(registry.sessions[0]); await client.getUserPlaylist();
-  expect(store.list()[0].kugouState).toEqual({ userId: '1' });
+  expect(registry.sessions[0].kugouState).toEqual({ userId: '1' });
+  expect(store.list()[0]).not.toHaveProperty('kugouState');
   await expect(client.userFavoriteTracks()).rejects.toThrow('未找到');
 });
 
@@ -378,7 +387,7 @@ test('manual cookie login validates edition and relogin defaults to the saved ed
   expect(registry.byAccessKey.get(key).cookie).toContain('token=renewed');
 });
 
-test('changing edition clears persisted liked IDs and rejects old in-flight discovery for the same user', async () => {
+test('changing edition clears cached liked IDs and rejects old in-flight discovery for the same user', async () => {
   const { store, registry } = storeAccount({ userId: '1', likedPlaylistId: '42' });
   const session = registry.sessions[0];
   session.favoriteTrackIds.add(hash);
@@ -395,18 +404,19 @@ test('changing edition clears persisted liked IDs and rejects old in-flight disc
   expect(store.list()[0].kugouState).toBeUndefined();
 });
 
-test('concept token refresh preserves edition, device identity and the persisted liked list', async () => {
+test('concept token refresh preserves edition, device identity and the in-memory liked list', async () => {
   const { refreshLoginSession } = require('../../../dist/loginRefresh');
   const p = loginPlatform();
   const { store, registry } = storeAccount();
   updateAccountCookieByAccessKey('key', 'kugou', 'userid=1; token=old; KUGOU_API_PLATFORM=lite; dfid=device', registry, store);
   const session = registry.sessions[0];
-  await session.saveKugouState({ userId: '1', likedPlaylistId: '42' });
+  session.kugouState = { userId: '1', likedPlaylistId: '42' };
   const refresh = jest.fn(async () => ({ body: { status: 1 }, cookie: ['userid=1', 'token=refreshed'] }));
   p.modules.set('login/token', refresh);
   await refreshLoginSession(session, { registry, platformFactory: { getPlatform: () => p }, accountStore: store });
   expect(refresh.mock.calls[0][0].cookie).toMatchObject({ KUGOU_API_PLATFORM: 'lite', dfid: 'device', token: 'old' });
   expect(store.list()[0].cookie).toContain('KUGOU_API_PLATFORM=lite');
   expect(store.list()[0].cookie).toContain('token=refreshed');
-  expect(store.list()[0].kugouState).toEqual({ userId: '1', likedPlaylistId: '42' });
+  expect(session.kugouState).toEqual({ userId: '1', likedPlaylistId: '42' });
+  expect(store.list()[0]).not.toHaveProperty('kugouState');
 });

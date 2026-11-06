@@ -56,7 +56,7 @@ test.each([false, true])('Kugou preserves default collection and ordinary same-n
   const sameName = { listid: 43, is_def: 0, name: '我喜欢', list_create_userid: '1' };
   const defaultList = { listid: 41, is_def: 1, name: '默认收藏', list_create_userid: '1' };
   const foreign = { ...liked, listid: 44, list_create_userid: '2' };
-  const context = { saveKugouState: jest.fn(async () => {}) };
+  const context = {};
   const callModule = jest.fn(async (route, { query }) => {
     if (route === 'user/playlist') return { code: 200, body: [defaultList, sameName, foreign, liked] };
     if (route === 'playlist/track/all/new') {

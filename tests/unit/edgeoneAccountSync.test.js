@@ -84,3 +84,46 @@ test('新实例会同步其他实例创建的账号，并限制强制刷新的�
     clock.mockRestore();
   }
 });
+
+test('酷狗内存歌单 ID 在配置同步时保留，远端切换账号时重新识别', async () => {
+  const now = 1_700_000_000_000;
+  const clock = jest.spyOn(Date, 'now').mockReturnValue(now);
+  const store = fakeAccountStore();
+  const original = { ...account('kugou'), platform: 'kugou', cookie: 'userid=1; token=test' };
+  store.insert(original);
+  const server = new MultiPlatformServer({
+    accountStore: store, edgeone: true, serveStatic: false, preload: false,
+    lxSourceManager: {
+      reconcileAccountSources() {}, getTrackUrl: async () => null,
+      handleTrackUrl: async () => null, update: async () => {}, dispose() {}
+    }
+  });
+  try {
+    const app = await server.initialize();
+    const callModule = jest.fn(async (route, { query }) => {
+      const changed = query.cookie.includes('userid=2');
+      if (route === 'user/playlist') return { code: 200, body: [{
+        listid: changed ? 84 : 42, name: '我喜欢', is_def: 2, list_create_userid: changed ? '2' : '1'
+      }] };
+      if (route === 'playlist/track/all/new') return { code: 200, body: [] };
+      throw new Error(`Unexpected route: ${route}`);
+    });
+    global.__musicPlatformFactory__ = { getPlatform: () => ({ callModule }) };
+    const load = () => request(app).get('/v1/user/favorite/tracks').set('Authorization', 'Bearer kugou').expect(200);
+    await load();
+    store.remote.push({ ...original, name: 'renamed' });
+    clock.mockReturnValue(now + 31_000);
+    await load();
+    expect(callModule.mock.calls.filter(([route]) => route === 'user/playlist')).toHaveLength(1);
+    store.remote.push({ ...original, cookie: 'userid=2; token=other' });
+    clock.mockReturnValue(now + 62_000);
+    await load();
+    expect(callModule.mock.calls.filter(([route]) => route === 'user/playlist')).toHaveLength(2);
+    expect(callModule.mock.calls.filter(([route]) => route === 'playlist/track/all/new').map(([, req]) => req.query.listid))
+      .toEqual(['42', '42', '84']);
+    expect(store.list()[0]).not.toHaveProperty('kugouState');
+  } finally {
+    clock.mockRestore();
+    delete global.__musicPlatformFactory__;
+  }
+});

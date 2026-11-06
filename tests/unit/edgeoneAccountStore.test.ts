@@ -129,18 +129,18 @@ test('EdgeOne account store falls back to an atomic JSON file without Blob', asy
   expect(reopened.list()).toHaveLength(1);
 });
 
-test('Kugou liked playlist ID survives EdgeOne Blob reload and credential-only updates', async () => {
+test('EdgeOne ignores legacy Kugou cache and removes it from subsequent account writes', async () => {
   const blob = new MemoryBlobStore();
-  const first = await EdgeOneAccountStore.open({ blob });
   const state = { userId: '1', likedPlaylistId: '42' };
-  first.insert({ platform: 'kugou', api_access_key: 'kugou', cookie: 'userid=1; token=old', kugouState: state });
-  await first.flush();
+  blob.values.set('accounts/kugou', JSON.stringify({
+    version: 1, account: { platform: 'kugou', api_access_key: 'kugou', cookie: 'userid=1; token=old', kugouState: state }
+  }));
   const second = await EdgeOneAccountStore.open({ blob });
-  expect(second.list()[0].kugouState).toEqual(state);
+  expect(second.list()[0]).not.toHaveProperty('kugouState');
   second.update('kugou', { cookie: 'userid=1; token=new' });
   await second.flush();
-  expect((await EdgeOneAccountStore.open({ blob })).list()[0].kugouState).toEqual(state);
-  second.update('kugou', { kugouState: undefined });
-  await second.flush();
-  expect((await EdgeOneAccountStore.open({ blob })).list()[0].kugouState).toBeUndefined();
+  const account = (await EdgeOneAccountStore.open({ blob })).list()[0];
+  expect(account).toMatchObject({ cookie: 'userid=1; token=new' });
+  expect(account).not.toHaveProperty('kugouState');
+  expect(JSON.parse(blob.values.get('accounts/kugou')!).account).not.toHaveProperty('kugouState');
 });

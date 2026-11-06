@@ -94,18 +94,23 @@ describe('SQLite account store', () => {
     ])
   })
 
-  test('旧数据库升级后持久化 deviceId 和设备状态', () => {
+  test('旧数据库升级移除酷狗缓存列，保留账号并继续持久化设备状态', () => {
     const workDir = makeWorkDir()
     const database = new DatabaseSync(sqliteAccountsFilePath(workDir))
-    database.exec('CREATE TABLE accounts (id INTEGER PRIMARY KEY, platform TEXT, name TEXT, cookie TEXT, api_access_key TEXT, stateless TEXT, use_luoxue TEXT, lx_source TEXT, updated_at TEXT)')
+    database.exec('CREATE TABLE accounts (id INTEGER PRIMARY KEY, platform TEXT, name TEXT, cookie TEXT, api_access_key TEXT, stateless TEXT, use_luoxue TEXT, lx_source TEXT, kugou_state TEXT, updated_at TEXT)')
     database.exec("INSERT INTO accounts (platform, api_access_key) VALUES ('\"qq\"', 'qq-key')")
+    database.prepare('UPDATE accounts SET kugou_state = ?').run(JSON.stringify({ userId: '1', likedPlaylistId: '42' }))
     database.close()
 
     const store = createLocalAccountStore(workDir)
     store.update('qq-key', { deviceId: 'android-id', deviceState: 'encoded-device-state' })
     store.close()
     const reopened = createLocalAccountStore(workDir)
-    expect(reopened.list()[0]).toMatchObject({ deviceId: 'android-id', deviceState: 'encoded-device-state' })
+    expect(reopened.list()[0]).toMatchObject({ platform: 'qq', api_access_key: 'qq-key', deviceId: 'android-id', deviceState: 'encoded-device-state' })
+    expect(reopened.list()[0]).not.toHaveProperty('kugouState')
+    const migrated = new DatabaseSync(sqliteAccountsFilePath(workDir), { readOnly: true })
+    expect(migrated.prepare('PRAGMA table_info(accounts)').all().map(column => column.name)).not.toContain('kugou_state')
+    migrated.close()
     reopened.close()
   })
 })

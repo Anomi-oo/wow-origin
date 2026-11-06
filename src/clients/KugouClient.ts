@@ -140,7 +140,7 @@ export class KugouClient extends MusicClientBase {
     const loading = (async () => {
       const list = await this.allRows('user/playlist');
       const liked = findLikedPlaylist(list, this.userId);
-      await this.saveLikedId(liked?.listid ? text(liked.listid) : undefined);
+      this.setLikedId(liked?.listid ? text(liked.listid) : undefined);
       this.assertCurrentAccount();
       this.context.kugouPlaylists = list;
       return list;
@@ -154,13 +154,9 @@ export class KugouClient extends MusicClientBase {
       throw new BadRequestError('酷狗账号已变更，请重新请求');
     }
   }
-  private async saveLikedId(likedPlaylistId?: string): Promise<void> {
+  private setLikedId(likedPlaylistId?: string): void {
     this.assertCurrentAccount();
-    const state = { userId: this.userId, ...(likedPlaylistId ? { likedPlaylistId } : {}) };
-    if (this.context.kugouState?.userId === state.userId && this.context.kugouState?.likedPlaylistId === likedPlaylistId) return;
-    await this.context.saveKugouState?.(state);
-    this.assertCurrentAccount();
-    this.context.kugouState = state;
+    this.context.kugouState = { userId: this.userId, ...(likedPlaylistId ? { likedPlaylistId } : {}) };
   }
   private async likedId(): Promise<string> {
     this.assertCurrentAccount();
@@ -224,7 +220,7 @@ export class KugouClient extends MusicClientBase {
     catch (error) {
       // Only a confirmed stale list ID warrants rediscovery; transport/auth errors retain it.
       if (!(error as any).stalePlaylist) throw error;
-      await this.saveLikedId(); this.context.kugouPlaylists = undefined;
+      this.setLikedId(); this.context.kugouPlaylists = undefined;
       listid = await this.likedId();
       raw = await this.allRows('playlist/track/all/new', { listid });
     }

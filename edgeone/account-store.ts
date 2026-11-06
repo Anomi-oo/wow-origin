@@ -34,6 +34,13 @@ export interface EdgeOneAccountStoreOptions {
   initialDocument?: string | null;
 }
 
+/** Older Blob documents may contain the now memory-only Kugou cache. */
+function withoutLegacyKugouState(account: RawMusicAccount): RawMusicAccount {
+  const result = { ...account } as RawMusicAccount & { kugouState?: unknown };
+  delete result.kugouState;
+  return result;
+}
+
 function parseAccountDocument(text: string | null | undefined): RawMusicAccount[] {
   if (!text || !text.trim()) return [];
   const parsed: unknown = JSON.parse(text);
@@ -45,7 +52,7 @@ function parseAccountDocument(text: string | null | undefined): RawMusicAccount[
   if (!accounts) throw new Error('EdgeOne 账号 Blob 格式无效');
   return accounts.filter(
     (account): account is RawMusicAccount => Boolean(account) && typeof account === 'object' && !Array.isArray(account)
-  );
+  ).map(withoutLegacyKugouState);
 }
 
 function parseStoredAccount(text: string | null | undefined): RawMusicAccount | null {
@@ -55,7 +62,7 @@ function parseStoredAccount(text: string | null | undefined): RawMusicAccount | 
     parsed && typeof parsed === 'object' && !Array.isArray(parsed) && 'account' in (parsed as Record<string, unknown>)
       ? (parsed as { account: unknown }).account
       : parsed;
-  return account && typeof account === 'object' && !Array.isArray(account) ? (account as RawMusicAccount) : null;
+  return account && typeof account === 'object' && !Array.isArray(account) ? withoutLegacyKugouState(account as RawMusicAccount) : null;
 }
 
 function serializeAccount(account: RawMusicAccount): string {
@@ -111,7 +118,7 @@ export class EdgeOneAccountStore implements AccountStore {
   private legacyDocumentPending = false;
 
   constructor(options: EdgeOneAccountStoreOptions = {}) {
-    this.accounts = (options.accounts ?? []).map((account) => ({ ...account }));
+    this.accounts = (options.accounts ?? []).map(withoutLegacyKugouState);
     this.blob = options.blob;
     this.storeName = options.storeName ?? DEFAULT_BLOB_STORE_NAME;
     this.filePath = options.blob ? undefined : options.filePath;
@@ -231,7 +238,7 @@ export class EdgeOneAccountStore implements AccountStore {
   }
 
   insert(account: RawMusicAccount): void {
-    const next = { ...account };
+    const next = withoutLegacyKugouState(account);
     const key = this.blob ? accountBlobKey(next) : null;
     if (this.blob && !key) throw new Error('EdgeOne Blob 账号缺少 api_access_key');
     this.accounts.push(next);
@@ -245,11 +252,11 @@ export class EdgeOneAccountStore implements AccountStore {
   update(apiAccessKey: string, changes: Partial<RawMusicAccount>): void {
     const index = this.accounts.findIndex((account) => account.api_access_key === apiAccessKey);
     if (index < 0) throw new Error('EdgeOne Blob 中未找到对应 api_access_key');
-    const next = {
+    const next = withoutLegacyKugouState({
       ...this.accounts[index],
       ...changes,
       api_access_key: apiAccessKey
-    };
+    });
     this.accounts[index] = next;
     if (this.blob) {
       const key = blobKeyForApiKey(apiAccessKey);

@@ -6,7 +6,7 @@ export function kugouEdition(cookie: string): KugouEdition {
   return value || 'standard';
 }
 
-/** Only stable account-scoped identifiers are persisted, never a playlist's song contents. */
+/** Account-scoped cache; rediscovered after a process or session restart. */
 export interface KugouAccountState {
   userId: string;
   likedPlaylistId?: string;
@@ -14,17 +14,9 @@ export interface KugouAccountState {
 export interface KugouAccountContext {
   cookie?: string;
   kugouState?: KugouAccountState;
-  saveKugouState?: (state: KugouAccountState) => Promise<void>;
   kugouPlaylists?: any[];
   kugouPlaylistsLoading?: Promise<any[]>;
 }
 export function kugouUserId(cookie: string): string {
   return String(cookie).split(';').map(p => p.trim()).find(p => p.startsWith('userid='))?.slice(7) || '';
-}
-export function normalizeKugouState(value: unknown, cookie: string): KugouAccountState | undefined {
-  const userId = kugouUserId(cookie);
-  if (!userId || !value || typeof value !== 'object') return undefined;
-  const state = value as Partial<KugouAccountState>;
-  if (state.userId !== userId) return undefined;
-  return { userId, ...(/^\d+$/.test(state.likedPlaylistId || '') && Number(state.likedPlaylistId) > 0 ? { likedPlaylistId: state.likedPlaylistId } : {}) };
 }

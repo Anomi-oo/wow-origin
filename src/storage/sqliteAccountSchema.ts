@@ -14,7 +14,6 @@ export const ACCOUNT_SCHEMA_SQL = `
     lx_source TEXT,
     deviceId TEXT,
     device_state TEXT,
-    kugou_state TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
@@ -72,8 +71,7 @@ export function accountValues(account: RawMusicAccount): Array<string | null> {
     booleanValue(account.useLuoxue),
     json(account.lxSource),
     text(account.deviceId),
-    text(account.deviceState),
-    json(account.kugouState)
+    text(account.deviceState)
   ];
 }
 
@@ -87,7 +85,6 @@ export function rowToAccount(row: StoredAccountRow): RawMusicAccount {
     useLuoxue: readBoolean(row.use_luoxue),
     lxSource: readJson(row.lx_source),
     deviceId: row.device_id ?? undefined,
-    deviceState: row.device_state ?? undefined,
-    kugouState: readJson(row.kugou_state)
+    deviceState: row.device_state ?? undefined
   };
 }

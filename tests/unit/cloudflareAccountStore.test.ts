@@ -17,25 +17,25 @@ test('Cloudflare deletion removes only the selected account from durable SQLite'
   database.close();
 });
 
-test('Cloudflare migrates existing accounts and persists Kugou liked-list state independently', () => {
+test('Cloudflare removes the legacy Kugou cache column while preserving accounts and credential updates', () => {
   const database = new DatabaseSync(':memory:');
   database.exec(`CREATE TABLE accounts (
     id INTEGER PRIMARY KEY AUTOINCREMENT, platform TEXT, name TEXT, cookie TEXT, api_access_key TEXT,
-    stateless TEXT, use_luoxue TEXT, lx_source TEXT, deviceId TEXT, device_state TEXT,
+    stateless TEXT, use_luoxue TEXT, lx_source TEXT, deviceId TEXT, device_state TEXT, kugou_state TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP
   )`);
+  database.prepare('INSERT INTO accounts (platform, api_access_key, cookie, kugou_state) VALUES (?, ?, ?, ?)')
+    .run('kugou', 'kugou', 'userid=1', JSON.stringify({ userId: '1', likedPlaylistId: '42' }));
   const sql = { exec(query: string, ...bindings: any[]) {
     if (/CREATE TABLE|ALTER TABLE/.test(query)) { database.exec(query); return []; }
     return database.prepare(query).all(...bindings) as Record<string, unknown>[];
   } };
   const store = new DurableObjectAccountStore(sql);
-  const state = { userId: '1', likedPlaylistId: '42' };
-  store.insert({ platform: 'kugou', api_access_key: 'kugou', cookie: 'userid=1', kugouState: state });
+  expect(database.prepare('PRAGMA table_info(accounts)').all().map(column => column.name)).not.toContain('kugou_state');
   store.insert({ platform: 'qq', api_access_key: 'qq' });
   store.update('kugou', { cookie: 'userid=1; token=new' });
-  expect(new DurableObjectAccountStore(sql).list()[0].kugouState).toEqual(state);
-  expect(store.list()[1].kugouState).toBeUndefined();
-  store.update('kugou', { kugouState: undefined });
-  expect(store.list()[0].kugouState).toBeUndefined();
+  expect(new DurableObjectAccountStore(sql).list()[0]).toMatchObject({ platform: 'kugou', cookie: 'userid=1; token=new' });
+  expect(store.list()[0]).not.toHaveProperty('kugouState');
+  expect(store.list()[1]).toMatchObject({ platform: 'qq', api_access_key: 'qq' });
   database.close();
 });
