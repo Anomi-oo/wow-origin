@@ -8,6 +8,9 @@ RUN npm ci
 COPY tsconfig*.json ./
 COPY types ./types
 COPY src ./src
+# 网页样式在构建阶段由 web/styles.css 编译，Tailwind 还要扫描 public 里的页面与脚本
+COPY web ./web
+COPY public ./public
 RUN npm run build
 
 FROM node:22-alpine AS production
@@ -26,7 +29,7 @@ COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
 COPY --chown=nodejs:nodejs core ./core
 COPY --chown=nodejs:nodejs platforms ./platforms
 COPY --chown=nodejs:nodejs util ./util
-COPY --chown=nodejs:nodejs public ./public
+COPY --from=builder --chown=nodejs:nodejs /app/public ./public
 COPY --chown=nodejs:nodejs LICENSE ./LICENSE
 
 ENV NODE_ENV=production \
