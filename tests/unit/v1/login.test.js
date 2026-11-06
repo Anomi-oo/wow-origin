@@ -233,12 +233,13 @@ describe('login router', () => {
 
     expect(response.text).toContain('扫码登录')
     expect(response.text).toContain('添加新账号')
-    expect(response.text).toContain('<button data-method="phone" class="hidden"')
+    expect(response.text).toContain('<button data-method="phone" class="tab hidden"')
     expect(response.text).toContain('Cookie 登录')
-    expect(response.text).toContain('id="login-methods" class="login-methods"')
+    expect(response.text).toContain('id="login-methods" class="tabs tabs-border"')
     expect(response.text).not.toContain('class="segment login-methods"')
-    expect(response.text.indexOf('id="login-methods"')).toBeGreaterThan(response.text.indexOf('id="qr-login-panel"'))
-    expect(response.text).toContain('更新已存在账号')
+    // 登录方式页签位于各登录面板之上
+    expect(response.text.indexOf('id="login-methods"')).toBeLessThan(response.text.indexOf('id="qr-login-panel"'))
+    expect(response.text).toContain('管理已有账号')
     expect(response.text).toContain('id="account-config" class="login-step hidden"')
     expect(response.text).toContain('id="account-origin-qr"')
     expect(response.text).toContain('id="account-name"')

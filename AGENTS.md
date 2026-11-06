@@ -13,6 +13,7 @@ npm run test:unit    # 仅单元测试
 npm run test:integration  # 仅集成测试
 npm run test:coverage     # 覆盖率报告
 npm run edgeone:build     # 生成 EdgeOne 云函数产物
+npm run build:css         # 编译网页样式 web/styles.css → public/styles.css（build 已包含）
 ```
 
 ### 环境配置
@@ -29,6 +30,7 @@ npm run edgeone:build     # 生成 EdgeOne 云函数产物
 - v1 API：`/v1/` 路由由 `aduoer-wow-sdk` 提供，本项目只把私有平台 Adapter 和账号上下文接入 SDK
 - 协议、响应 schema 与 OpenAPI 的唯一所有者是公开 `aduoer-wow-sdk`；`openapi.ts` 仅保留兼容导出
 - `/v1/status.data.version` 是当前安装的 SDK SemVer，不存在 `apiVersion`
+- 网页界面：`public/index.html` + `public/app.js` 为无框架静态页，样式源在 `web/styles.css`（Tailwind CSS v4 + daisyUI，`@source` 只扫描这两个文件），编译产物 `public/styles.css` 需随改动一起提交，Cloudflare 静态资源、EdgeOne 内联与 Tauri 都直接使用它；Tauri 的 CSP 为 `style-src 'self'`，页面不能用外链或内联样式。布局为顶部导航，手机宽度下导航链接隐藏、改用面包屑表达当前层级；桌面版（Tauri）专属元素加 `tauri-only`，JS 用 `hidden` 类控制显隐，这两条规则在 `web/styles.css` 中不分层并带 `!important`
 - 测试配置：`jest.config.js`，覆盖率阈值 50%
 - EdgeOne 部署：`edgeone/entry.ts` 是云函数入口，`edgeone.json` 定义构建与部署参数，`cloud-functions/README.md` 是平台识别云函数必需的占位文件
 

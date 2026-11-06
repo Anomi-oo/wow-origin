@@ -89,6 +89,7 @@ test('switching to YouTube Music opens Cookie login and hides other methods', as
   expect(element('qr-login-panel').classList.contains('hidden')).toBe(true)
   expect(element('qr').classList.contains('hidden')).toBe(true)
   expect(element('phone').classList.contains('hidden')).toBe(true)
+  expect(element('cookie').classList.contains('tab-active')).toBe(true)
   expect(element('ytmusic-cookie-help').classList.contains('hidden')).toBe(false)
 })
 
@@ -100,7 +101,7 @@ test('desktop only allows the local CAPTCHA proxy frame', () => {
   expect(html).toContain('<iframe id="phone-captcha-frame"')
   expect(html).toContain('sandbox="allow-scripts allow-forms"')
   expect(html).not.toContain('<a id="phone-captcha"')
-  expect(html).toContain('<button data-method="phone" class="hidden"')
+  expect(html).toContain('<button data-method="phone" class="tab hidden"')
 })
 
 test('relogin title uses the configured name across methods and resets when creating an account', async () => {
@@ -191,7 +192,7 @@ test('switching account keeps details visible and ignores stale responses', asyn
   ui.element('admin-mode').handlers.click()
   ui.element('admin-password').value = 'secret'
   await ui.element('admin-form').handlers.submit({ preventDefault() {} })
-  const clickAccount = index => ui.element('desktop-account-list').children[index].handlers.click()
+  const clickAccount = index => ui.element('desktop-account-list').children[index].children[0].handlers.click()
   const first = clickAccount(0)
   pending.get('first')(result(accounts[0]))
   await first
@@ -252,11 +253,12 @@ test('QR method selection sends the type and cancels stale QR sessions', async (
   ui.element('cookie').handlers.click()
   expect(cancelled()).toContain('mobile')
   expect(ui.element('qq-qr-types').classList.contains('hidden')).toBe(false)
-  expect(ui.element('qr').classList.contains('hidden')).toBe(true)
-  expect(ui.element('qr-mobile').classList.contains('active')).toBe(false)
+  expect(ui.element('qr').classList.contains('hidden')).toBe(false)
+  expect(ui.element('cookie').classList.contains('tab-active')).toBe(true)
+  expect(ui.element('qr-mobile').classList.contains('btn-active')).toBe(false)
   ui.element('qr-mobile').handlers.click()
   await new Promise(setImmediate)
-  expect(ui.element('qr-mobile').classList.contains('active')).toBe(true)
+  expect(ui.element('qr-mobile').classList.contains('btn-active')).toBe(true)
   expect(ui.element('qr-login-panel').classList.contains('hidden')).toBe(false)
   ui.element('scan-back').handlers.click()
   ui.element('netease').handlers.click()

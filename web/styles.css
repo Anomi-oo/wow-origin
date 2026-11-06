@@ -1,0 +1,186 @@
+/* 登录页样式源文件：Tailwind CSS v4 + daisyUI。
+   `npm run build:css` 编译为 public/styles.css（已提交，Cloudflare 静态资源与 EdgeOne 内联直接使用）。 */
+@import "tailwindcss" source(none);
+@source "../public/index.html";
+@source "../public/app.js";
+@plugin "daisyui" {
+  themes: false;
+}
+
+/* 主题：黑色主色，庄重典雅；浅色以 light 为底，深色以 dark 为底、主色改为近白。 */
+@plugin "daisyui/theme" {
+  name: "wow";
+  default: true;
+  color-scheme: light;
+  --color-base-100: oklch(100% 0 0);
+  --color-base-200: oklch(97% 0 0);
+  --color-base-300: oklch(92% 0 0);
+  --color-base-content: oklch(18% 0 0);
+  --color-primary: oklch(15% 0 0);
+  --color-primary-content: oklch(98% 0 0);
+  --color-secondary: oklch(40% 0 0);
+  --color-secondary-content: oklch(98% 0 0);
+  --color-accent: oklch(30% 0 0);
+  --color-accent-content: oklch(98% 0 0);
+  --color-neutral: oklch(25% 0 0);
+  --color-neutral-content: oklch(98% 0 0);
+  --color-info: oklch(60% 0.12 240);
+  --color-info-content: oklch(98% 0 0);
+  --color-success: oklch(62% 0.15 160);
+  --color-success-content: oklch(98% 0 0);
+  --color-warning: oklch(75% 0.15 80);
+  --color-warning-content: oklch(20% 0 0);
+  --color-error: oklch(60% 0.2 25);
+  --color-error-content: oklch(98% 0 0);
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 1rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+@plugin "daisyui/theme" {
+  name: "wow-dark";
+  prefersdark: true;
+  color-scheme: dark;
+  --color-base-100: oklch(20% 0 0);
+  --color-base-200: oklch(16% 0 0);
+  --color-base-300: oklch(27% 0 0);
+  --color-base-content: oklch(93% 0 0);
+  --color-primary: oklch(95% 0 0);
+  --color-primary-content: oklch(15% 0 0);
+  --color-secondary: oklch(75% 0 0);
+  --color-secondary-content: oklch(15% 0 0);
+  --color-accent: oklch(85% 0 0);
+  --color-accent-content: oklch(15% 0 0);
+  --color-neutral: oklch(30% 0 0);
+  --color-neutral-content: oklch(95% 0 0);
+  --color-info: oklch(70% 0.12 240);
+  --color-info-content: oklch(15% 0 0);
+  --color-success: oklch(72% 0.15 160);
+  --color-success-content: oklch(15% 0 0);
+  --color-warning: oklch(80% 0.15 80);
+  --color-warning-content: oklch(15% 0 0);
+  --color-error: oklch(68% 0.18 25);
+  --color-error-content: oklch(15% 0 0);
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 1rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+@theme {
+  --font-sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+  --font-mono: "SFMono-Regular", Menlo, Consolas, monospace;
+}
+
+/* 这些规则不进入分层：JS 用 .hidden 控制显隐，必须压过任何 display 工具类；
+   桌面版（Tauri）专属元素在网页里一律不显示。 */
+.hidden { display: none !important; }
+html:not(.tauri) .tauri-only { display: none !important; }
+/* daisyUI 的 .fieldset 是隐式单列网格且不分层，列宽会被 nowrap 的长值撑开；
+   同样不分层地改为 minmax(0,1fr)，长密钥才会截断而不是撑出卡片。 */
+.fieldset { grid-template-columns: minmax(0, 1fr); min-width: 0; }
+/* 非管理员看不到删除按钮时，整块危险区一起隐藏。 */
+.danger-zone:has(#delete-account.hidden) { display: none; }
+/* 聚焦态只加深边框，不要 daisyUI 的外圈 outline（看起来像粗细两道边框）。 */
+.input:focus, .input:focus-within, .select:focus, .select:focus-within, .textarea:focus, .textarea:focus-within {
+  outline: none;
+  --input-color: var(--color-base-content);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-base-content) 10%, transparent);
+}
+
+@layer components {
+  /* 顶部导航项：幽灵按钮，当前页高亮 */
+  .nav-item { @apply btn btn-ghost btn-sm font-medium whitespace-nowrap; }
+  .nav-item.active { @apply btn-active; }
+  .brand-mark { @apply grid size-8 place-items-center rounded-lg bg-primary text-primary-content font-bold; }
+  .status-dot { @apply inline-block size-2 rounded-full bg-success shadow-[0_0_10px_var(--color-success)]; }
+  .proxy-status { @apply inline-flex items-center gap-2 text-xs text-base-content/60; }
+
+  .page-header { @apply mb-6 sm:mb-8; }
+  .page-header h1 { @apply my-1 text-2xl font-bold tracking-tight sm:text-3xl; }
+  .page-header p:not(.eyebrow) { @apply m-0 text-base-content/60; }
+  .eyebrow { @apply m-0 text-xs font-bold tracking-[.14em] text-primary; }
+
+  .card-title-row { @apply flex items-center justify-between gap-3; }
+  .section-title { @apply mt-2 text-xs font-semibold tracking-wide text-base-content/60 uppercase; }
+  .entry-icon { @apply grid size-10 place-items-center rounded-xl bg-base-200 text-lg; }
+  /* 管理员/桌面版隐藏密钥入口卡后，添加卡独占一行但不拉满。 */
+  .entry-grid:has(#manage-account-card.hidden) { @apply md:grid-cols-1; }
+  .entry-grid:has(#manage-account-card.hidden) > .card { @apply md:max-w-2xl; }
+  .guide-steps { @apply m-0 grid list-none gap-3 p-0; }
+  .guide-steps li { @apply flex items-start gap-3 text-sm leading-relaxed; }
+  .guide-index { @apply grid size-6 shrink-0 place-items-center rounded-full bg-primary text-xs font-bold text-primary-content; }
+  .account-directory-item { @apply w-full cursor-pointer text-left; grid-template-columns: minmax(0, 1fr) auto auto; }
+  .account-directory-item:hover { @apply bg-base-200; }
+  .login-step h2 { @apply mb-4; }
+  #login-title { @apply min-w-0 [overflow-wrap:anywhere]; }
+
+  /* 只读值框：与输入框同高同边框（不 @apply input，否则会连禁用态样式一起铺平）。 */
+  .value-box { @apply inline-flex min-h-10 w-full items-center overflow-hidden rounded-field border border-base-300 bg-base-200 px-3 font-mono text-sm; }
+  /* 拼接行：输入框/值框 + 按钮无缝相接。自绘而不用 daisyUI 的 join，join 的 @scope 写法会让优化器报“Invalid empty selector”。 */
+  .copy-row { @apply flex w-full; }
+  .copy-row > :first-child { @apply min-w-0 flex-1 rounded-e-none; }
+  .copy-row > :last-child { @apply -ms-px rounded-s-none; }
+  .copy-row > :focus-within, .copy-row > :focus { @apply relative z-10; }
+  /* 按钮组：首尾保留外侧圆角，中间无缝相接 */
+  .btn-row { @apply inline-flex; }
+  .btn-row > .btn:not(:first-child) { @apply -ms-px rounded-s-none; }
+  .btn-row > .btn:not(:last-child) { @apply rounded-e-none; }
+  .btn-row > .btn:focus-visible, .btn-row > .btn.btn-active { @apply relative z-10; }
+
+  .button-stack { @apply grid gap-3; }
+  .button-row { @apply mt-5 flex flex-wrap justify-end gap-2; }
+
+  /* 二维码框：白底，图片未加载时隐藏 */
+  .qr-frame { @apply relative mx-auto my-3 grid aspect-square w-full max-w-[270px] place-items-center overflow-hidden rounded-2xl bg-white p-3 text-sm text-slate-500; }
+  .qr-frame img { @apply size-full object-contain; }
+  .qr-frame img:not([src]) { @apply hidden; }
+  .login-qr { @apply max-w-[230px]; }
+  .login-qr img.qr-invalid { @apply opacity-35 blur-sm; }
+  .qr-retry { @apply absolute inset-0 rounded-[inherit] bg-white/60 text-base font-semibold text-slate-700; }
+  .qr-retry:focus-visible { @apply outline-2 outline-primary -outline-offset-4; }
+
+  .message { @apply min-h-5 text-center text-sm text-base-content/60; }
+  .message.success { @apply text-success; }
+  .message.error { @apply text-error; }
+
+  /* 登录方式用 daisyUI 的 tabs（类直接写在标签上，tab 的嵌套选择器不能 @apply）；只隐藏该平台不支持的方式 */
+  .qr-panel { @apply flex flex-col items-center gap-2 py-2; }
+  /* 更新账号时平台不可更换：只显示当前平台的页签 */
+  #platform-switch.locked .tab:not(.tab-active) { @apply hidden; }
+
+  .phone-fields { @apply grid grid-cols-[85px_minmax(0,1fr)] gap-3; }
+  #phone-captcha { @apply mt-3; }
+  #phone-captcha-frame { @apply block h-[400px] w-full rounded-lg border border-base-300 bg-white; }
+
+  .switch-row { @apply mt-4 flex items-center justify-between gap-4 rounded-box border border-base-300 px-4 py-3; }
+  .switch-row > span { @apply grid gap-0.5; }
+  .switch-row small { @apply text-xs text-base-content/60; }
+
+  /* 账号身份区：PC 端 flex 横排、gap 分隔，左侧字段占满剩余宽度；右侧二维码列固定 158pt，
+     加上 6pt 间距与一行说明正好等于左侧两个字段加说明的高度（180pt）。手机端纵向堆叠，二维码居中、说明在其下方。 */
+  .account-identity { @apply flex flex-col gap-5 md:flex-row md:items-stretch; }
+  .account-identity-fields { @apply min-w-0 md:flex-1; }
+  .account-qr-panel { @apply flex flex-col items-center gap-1.5 text-center text-xs text-base-content/60 md:w-[158px]; }
+  .account-qr { @apply my-0 max-w-[192px] rounded-xl p-0 md:size-[158px] md:max-w-none; }
+  .field-heading { @apply flex items-center justify-between gap-3; }
+  .source-list { @apply grid gap-2; }
+  .account-nav-empty { @apply px-3 py-2 text-xs text-base-content/50; }
+
+  /* 启动页 */
+  .splash #splash-message { @apply max-h-[50vh] max-w-[min(760px,100%)] overflow-auto whitespace-pre-wrap [overflow-wrap:anywhere]; }
+}
+
+/* 桌面版：窗口不整页滚动，只有内容区滚动，顶部导航常驻。 */
+.tauri body { overflow: hidden; }
+.tauri .app-shell { height: 100vh; min-height: 0; }
+.tauri .content { min-height: 0; overflow: auto; }
