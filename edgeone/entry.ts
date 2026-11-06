@@ -1,3 +1,4 @@
+import '../src/nodeHttpClient';
 import express, { type Express } from 'express';
 import { platformModules } from '../cloudflare/generated/platform-modules.js';
 import { CloudflareLxSourceManager } from '../cloudflare/lx-manager';

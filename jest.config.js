@@ -24,7 +24,6 @@ module.exports = {
 
   // JavaScript 平台模块仍保留在项目根目录
   moduleNameMapper: {
-    '^\\.\\./core/(.*)$': '<rootDir>/core/$1',
     '^\\.\\./platforms/(.*)$': '<rootDir>/platforms/$1'
   },
 

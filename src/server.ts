@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import './nodeHttpClient';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { createApp } from './app';
