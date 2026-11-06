@@ -217,12 +217,20 @@
                   </div>
                   <div class="account-qr-panel">
                     <div class="qr-frame account-qr"><img id="account-origin-qr" alt="添加音乐源二维码"><span id="account-qr-placeholder">正在生成二维码…</span></div>
-                    <small>扫码或<a id="account-add-link" class="link font-bold">点我直接添加为音乐源</a></small>
+                    <span>扫码或<a id="account-add-link" class="link font-bold">点我直接添加为音乐源</a></span>
                   </div>
                 </div>
                 <div class="section-title">偏好</div>
                 <label class="switch-row"><span><strong>无状态模式</strong><small>用户数据由客户端维护</small></span><input id="account-stateless" class="toggle toggle-primary" type="checkbox" role="switch"></label>
-                <label class="switch-row"><span><strong>使用洛雪源</strong><small>失败时回退官方源</small></span><input id="account-luoxue" class="toggle toggle-primary" type="checkbox" role="switch"></label>
+                <label class="switch-row"><span><strong>使用洛雪源</strong><small>关闭后仅用登录账号获取音频</small></span><input id="account-luoxue" class="toggle toggle-primary" type="checkbox" role="switch"></label>
+                <fieldset id="account-audio-priority-field" class="fieldset">
+                  <legend class="fieldset-legend">音频获取策略</legend>
+                  <select id="account-audio-priority" class="select w-full">
+                    <option value="lx">洛雪源优先</option>
+                    <option value="account">账号优先</option>
+                  </select>
+                  <p id="account-audio-priority-hint" class="label"></p>
+                </fieldset>
                 <fieldset id="account-lx-source-settings" class="fieldset">
                   <div class="field-heading"><span class="fieldset-legend">账号洛雪源</span><button id="add-lx-source" class="btn btn-ghost btn-xs" type="button">＋ 添加地址</button></div>
                   <div id="lx-source-list" class="source-list"></div>

@@ -90,12 +90,14 @@ html:not(.tauri) .tauri-only { display: none !important; }
 .fieldset { grid-template-columns: minmax(0, 1fr); min-width: 0; }
 /* 非管理员看不到删除按钮时，整块危险区一起隐藏。 */
 .danger-zone:has(#delete-account.hidden) { display: none; }
-/* 聚焦态只加深边框，不要 daisyUI 的外圈 outline（看起来像粗细两道边框）。 */
+/* 聚焦态只加深这一道边框：不要 daisyUI 的外圈 outline，也不加光环。 */
 .input:focus, .input:focus-within, .select:focus, .select:focus-within, .textarea:focus, .textarea:focus-within {
   outline: none;
+  box-shadow: none;
   --input-color: var(--color-base-content);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-base-content) 10%, transparent);
 }
+/* daisyUI 5.7 给 select 用了 Chrome 的 base-select 外观，会在自绘边框外再画一层原生边框。 */
+.select { appearance: none; }
 
 @layer components {
   /* 顶部导航项：幽灵按钮，当前页高亮 */
@@ -111,7 +113,8 @@ html:not(.tauri) .tauri-only { display: none !important; }
   .eyebrow { @apply m-0 text-xs font-bold tracking-[.14em] text-primary; }
 
   .card-title-row { @apply flex items-center justify-between gap-3; }
-  .section-title { @apply mt-2 text-xs font-semibold tracking-wide text-base-content/60 uppercase; }
+  /* 分组标题与字段标题同一视觉：12pt 半粗、正文色。 */
+  .section-title { @apply mt-1 text-xs font-semibold text-base-content; }
   .entry-icon { @apply grid size-10 place-items-center rounded-xl bg-base-200 text-lg; }
   /* 管理员/桌面版隐藏密钥入口卡后，添加卡独占一行但不拉满。 */
   .entry-grid:has(#manage-account-card.hidden) { @apply md:grid-cols-1; }
@@ -126,11 +129,9 @@ html:not(.tauri) .tauri-only { display: none !important; }
 
   /* 只读值框：与输入框同高同边框（不 @apply input，否则会连禁用态样式一起铺平）。 */
   .value-box { @apply inline-flex min-h-10 w-full items-center overflow-hidden rounded-field border border-base-300 bg-base-200 px-3 font-mono text-sm; }
-  /* 拼接行：输入框/值框 + 按钮无缝相接。自绘而不用 daisyUI 的 join，join 的 @scope 写法会让优化器报“Invalid empty selector”。 */
-  .copy-row { @apply flex w-full; }
-  .copy-row > :first-child { @apply min-w-0 flex-1 rounded-e-none; }
-  .copy-row > :last-child { @apply -ms-px rounded-s-none; }
-  .copy-row > :focus-within, .copy-row > :focus { @apply relative z-10; }
+  /* 输入框/值框 + 按钮：两个独立控件，各自保留完整圆角，中间 4pt 间距。 */
+  .copy-row { @apply flex w-full gap-1; }
+  .copy-row > :first-child { @apply min-w-0 flex-1; }
   /* 按钮组：首尾保留外侧圆角，中间无缝相接 */
   .btn-row { @apply inline-flex; }
   .btn-row > .btn:not(:first-child) { @apply -ms-px rounded-s-none; }
@@ -162,7 +163,8 @@ html:not(.tauri) .tauri-only { display: none !important; }
   #phone-captcha { @apply mt-3; }
   #phone-captcha-frame { @apply block h-[400px] w-full rounded-lg border border-base-300 bg-white; }
 
-  .switch-row { @apply mt-4 flex items-center justify-between gap-4 rounded-box border border-base-300 px-4 py-3; }
+  /* 开关行之间只靠 card-body 的 8pt 间距，不再额外加上边距。 */
+  .switch-row { @apply flex items-center justify-between gap-4 rounded-box border border-base-300 px-4 py-2.5; }
   .switch-row > span { @apply grid gap-0.5; }
   .switch-row small { @apply text-xs text-base-content/60; }
 

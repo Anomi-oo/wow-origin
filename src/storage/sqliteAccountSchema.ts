@@ -11,6 +11,7 @@ export const ACCOUNT_SCHEMA_SQL = `
     api_access_key TEXT,
     stateless INTEGER,
     use_luoxue INTEGER,
+    audio_source_priority TEXT,
     lx_source TEXT,
     deviceId TEXT,
     device_state TEXT,
@@ -69,6 +70,7 @@ export function accountValues(account: RawMusicAccount): Array<string | null> {
     text(account.api_access_key),
     booleanValue(account.stateless),
     booleanValue(account.useLuoxue),
+    text(account.audioSourcePriority),
     json(account.lxSource),
     text(account.deviceId),
     text(account.deviceState)
@@ -83,6 +85,7 @@ export function rowToAccount(row: StoredAccountRow): RawMusicAccount {
     api_access_key: row.api_access_key ?? undefined,
     stateless: readBoolean(row.stateless),
     useLuoxue: readBoolean(row.use_luoxue),
+    audioSourcePriority: row.audio_source_priority ?? undefined,
     lxSource: readJson(row.lx_source),
     deviceId: row.device_id ?? undefined,
     deviceState: row.device_state ?? undefined

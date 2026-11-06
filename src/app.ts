@@ -411,6 +411,7 @@ class MultiPlatformServer {
           existing.cookie = session.cookie;
           existing.stateless = session.stateless;
           existing.useLuoxue = session.useLuoxue;
+          existing.audioSourcePriority = session.audioSourcePriority;
           existing.lxSource = session.lxSource;
           existing.deviceId = session.deviceId;
           existing.deviceState = session.deviceState;

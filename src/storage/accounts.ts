@@ -53,11 +53,12 @@ export class SqliteAccountStore implements AccountStore {
     const columns = this.database.prepare('PRAGMA table_info(accounts)').all() as Array<{ name: string }>;
     if (!columns.some(column => column.name === 'deviceId')) this.database.exec('ALTER TABLE accounts ADD COLUMN deviceId TEXT');
     if (!columns.some(column => column.name === 'device_state')) this.database.exec('ALTER TABLE accounts ADD COLUMN device_state TEXT');
+    if (!columns.some(column => column.name === 'audio_source_priority')) this.database.exec('ALTER TABLE accounts ADD COLUMN audio_source_priority TEXT');
     if (columns.some(column => column.name === 'kugou_state')) this.database.exec('ALTER TABLE accounts DROP COLUMN kugou_state');
     this.insertStatement = this.database.prepare(`
       INSERT INTO accounts (
-        platform, name, cookie, api_access_key, stateless, use_luoxue, lx_source, deviceId, device_state
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        platform, name, cookie, api_access_key, stateless, use_luoxue, audio_source_priority, lx_source, deviceId, device_state
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     this.migrateScalarColumns();
     if (!this.database.prepare('SELECT name FROM account_migrations WHERE name = ?').get('legacy-json')) {
@@ -69,7 +70,7 @@ export class SqliteAccountStore implements AccountStore {
 
   list(): RawMusicAccount[] {
     const rows = this.database.prepare(`
-      SELECT id, platform, name, cookie, api_access_key, stateless, use_luoxue, lx_source, deviceId AS device_id, device_state
+      SELECT id, platform, name, cookie, api_access_key, stateless, use_luoxue, audio_source_priority, lx_source, deviceId AS device_id, device_state
       FROM accounts
       ORDER BY id ASC
     `).all() as unknown as StoredAccountRow[];
@@ -82,7 +83,7 @@ export class SqliteAccountStore implements AccountStore {
 
   update(apiAccessKey: string, changes: Partial<RawMusicAccount>): void {
     const row = this.database.prepare(`
-      SELECT id, platform, name, cookie, api_access_key, stateless, use_luoxue, lx_source, deviceId AS device_id, device_state
+      SELECT id, platform, name, cookie, api_access_key, stateless, use_luoxue, audio_source_priority, lx_source, deviceId AS device_id, device_state
       FROM accounts
       WHERE api_access_key = ?
       ORDER BY id ASC
@@ -94,7 +95,7 @@ export class SqliteAccountStore implements AccountStore {
     this.database.prepare(`
       UPDATE accounts
       SET platform = ?, name = ?, cookie = ?, api_access_key = ?, stateless = ?,
-          use_luoxue = ?, lx_source = ?, deviceId = ?, device_state = ?, updated_at = CURRENT_TIMESTAMP
+          use_luoxue = ?, audio_source_priority = ?, lx_source = ?, deviceId = ?, device_state = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(...accountValues(account), row.id);
   }

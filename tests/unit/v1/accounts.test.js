@@ -145,6 +145,21 @@ describe('v1 accounts', () => {
     )).toThrow('最多配置 10 个')
   })
 
+  test('解析 audioSourcePriority，缺失或非法时按 lx 处理', () => {
+    const workDir = makeWorkDir()
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    fs.writeFileSync(path.join(workDir, 'data', 'accounts.json'), JSON.stringify([
+      { platform: 'qq', name: 'default', cookie: '', api_access_key: 'key-default' },
+      { platform: 'qq', name: 'account', cookie: '', api_access_key: 'key-account', audioSourcePriority: 'account' },
+      { platform: 'qq', name: 'invalid', cookie: '', api_access_key: 'key-invalid', audioSourcePriority: 'official' }
+    ]))
+    const registry = loadAccountSessions(workDir)
+    expect(registry.byAccessKey.get('key-default').audioSourcePriority).toBe('lx')
+    expect(registry.byAccessKey.get('key-account').audioSourcePriority).toBe('account')
+    expect(registry.byAccessKey.get('key-invalid').audioSourcePriority).toBe('lx')
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('audioSourcePriority 必须是 lx 或 account'))
+  })
+
   test('useLuoxue 非 boolean 时保留账号、打印警告并按 false 处理', () => {
     const workDir = makeWorkDir()
     fs.writeFileSync(path.join(workDir, 'data', 'accounts.json'), JSON.stringify([
@@ -229,16 +244,24 @@ describe('v1 accounts', () => {
     const registry = loadAccountSessions(workDir)
 
     const result = updateAccountConfigByAccessKey('key-1', {
-      name: '新名称', stateless: false, useLuoxue: true,
+      name: '新名称', stateless: false, useLuoxue: true, audioSourcePriority: 'account',
       lxSource: [' https://example.com/a.js ', '', 'https://example.com/a.js']
     }, registry, workDir)
 
     expect(result.session).toMatchObject({
       platform: 'qq', name: '新名称', cookie: 'old', stateless: false,
-      useLuoxue: true, lxSource: ['https://example.com/a.js']
+      useLuoxue: true, audioSourcePriority: 'account', lxSource: ['https://example.com/a.js']
     })
     expect(readAccounts(workDir)[0].lxSource)
       .toEqual(['https://example.com/a.js'])
+    expect(readAccounts(workDir)[0].audioSourcePriority).toBe('account')
+
+    // 缺省时保留当前策略，非法值拒绝
+    expect(updateAccountConfigByAccessKey('key-1', { name: '新名称', stateless: false, useLuoxue: true, lxSource: [] }, registry, workDir)
+      .session.audioSourcePriority).toBe('account')
+    expect(() => updateAccountConfigByAccessKey('key-1', {
+      name: '新名称', stateless: false, useLuoxue: true, audioSourcePriority: 'official', lxSource: []
+    }, registry, workDir)).toThrow('audioSourcePriority 必须是 lx 或 account')
   })
 
   test('生成无短横线 api_access_key', () => {

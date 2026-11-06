@@ -144,6 +144,7 @@ function accountData(session: MusicAccountSession, allowAccountLxSources: boolea
     name: session.name,
     stateless: session.stateless,
     useLuoxue: session.useLuoxue,
+    audioSourcePriority: session.audioSourcePriority,
     lxSource: allowAccountLxSources ? session.lxSource : []
   };
 }
@@ -387,6 +388,7 @@ export function createLoginRouter({
         name: req.body?.name,
         stateless: req.body?.stateless,
         useLuoxue: session.platform === 'ytmusic' ? false : req.body?.useLuoxue,
+        audioSourcePriority: session.platform === 'ytmusic' ? undefined : req.body?.audioSourcePriority,
         lxSource: session.platform === 'ytmusic' ? [] : allowAccountLxSources ? req.body?.lxSource : []
       }, registry, storage);
       onAccountsChanged?.();

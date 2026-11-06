@@ -44,6 +44,24 @@ describe('Wow adapter', () => {
     expect(lxResolver.resolveTrackUrl).toHaveBeenCalledTimes(mode === 'disabled' ? 0 : 1)
   })
 
+  test('账号优先时先用官方音频，失败后才回退洛雪', async () => {
+    const hash = 'a'.repeat(32)
+    const officialResult = { url: 'https://official.test/song.mp3', quality: 'exhigh', format: 'mp3', bitrate: 320000, size: 0 }
+    const lxResult = { url: 'https://lx.test/song.flac', quality: 'exhigh', format: '', bitrate: null, size: 0 }
+    const official = jest.spyOn(KugouClient.prototype, 'getTrackUrlForQuality').mockResolvedValue(officialResult)
+    const lxResolver = { resolveTrackUrl: jest.fn().mockResolvedValue(lxResult) }
+    const account = { platform: 'kugou', cookie: 'userid=1', useLuoxue: true, audioSourcePriority: 'account', lxSource: [] }
+    await expect(createAdapter(account, lxResolver).getTrackUrl(hash, 'exhigh')).resolves.toEqual(officialResult)
+    expect(lxResolver.resolveTrackUrl).not.toHaveBeenCalled()
+
+    official.mockRejectedValue(new Error('official failed'))
+    await expect(createAdapter(account, lxResolver).getTrackUrl(hash, 'exhigh')).resolves.toEqual(lxResult)
+    expect(lxResolver.resolveTrackUrl).toHaveBeenCalledTimes(1)
+
+    lxResolver.resolveTrackUrl.mockResolvedValue(undefined)
+    await expect(createAdapter(account, lxResolver).getTrackUrl(hash, 'exhigh')).rejects.toThrow('official failed')
+  })
+
   test('根据账号创建 SDK Adapter', () => {
     const adapter = createAdapter({
       platform: 'netease',

@@ -83,8 +83,23 @@ export function createAdapter(
     return undefined;
   };
 
-  // 每个档位先尝试洛雪和官方；降级统一由 client 按歌曲详情决定。
+  // 每个档位按账号的音频获取策略决定洛雪与官方的先后；降级统一由 client 按歌曲详情决定。
   client.getTrackUrlForQuality = async (id: string, quality: string) => {
+    if (account.audioSourcePriority === 'account') {
+      // 账号优先：官方失败或拿到无效地址时再试洛雪；洛雪也拿不到时交回官方的结果或错误。
+      let official: TrackUrl | undefined;
+      let failure: unknown;
+      try {
+        official = await defaultGetTrackUrl(id, quality);
+        if (hasValidAudioUrl(official)) return official;
+      } catch (error) {
+        failure = error;
+      }
+      const lxTrackUrl = await getLxTrackUrl(id, quality);
+      if (lxTrackUrl) return lxTrackUrl;
+      if (official) return official;
+      throw failure;
+    }
     const lxTrackUrl = await getLxTrackUrl(id, quality);
     if (lxTrackUrl) return lxTrackUrl;
     return defaultGetTrackUrl(id, quality);

@@ -175,6 +175,17 @@
     $('ytmusic-cookie-help').classList.toggle('hidden', platform !== 'ytmusic');
   }
   function platformLabel(platform) { return platform === 'kugou' ? '酷狗音乐' : platform === 'qq' ? 'QQ 音乐' : platform === 'ytmusic' ? 'YouTube Music' : '网易云音乐'; }
+  const audioPriorityHints = {
+    lx: '先用洛雪源获取音频，全部失败后回退到账号。',
+    account: '先用登录账号获取音频，失败后回退到洛雪源。'
+  };
+  /// 音频获取策略只在启用洛雪源时有意义：未启用或 YouTube Music 时禁用，并随选项更新说明文字。
+  function updateAudioPriority() {
+    const select = $('account-audio-priority');
+    const enabled = $('account-luoxue').checked && state.account?.platform !== 'ytmusic';
+    select.disabled = !enabled;
+    $('account-audio-priority-hint').textContent = enabled ? audioPriorityHints[select.value] || '' : '启用洛雪源后可选择。';
+  }
   function showError(error) { $('login-error').textContent = error.message || String(error); }
 
   async function verifyAccount() {
@@ -302,6 +313,8 @@
     $('account-platform').textContent = platformLabel(account.platform) + (account.platform === 'kugou' ? ` · ${state.kugouEdition === 'lite' ? '概念版' : '标准版'}` : '');
     $('account-key').textContent = account.apiAccessKey; $('account-name').value = account.name || account.accountName || '';
     $('account-stateless').checked = Boolean(account.stateless); $('account-luoxue').checked = account.useLuoxue !== false;
+    $('account-audio-priority').value = account.audioSourcePriority === 'account' ? 'account' : 'lx';
+    updateAudioPriority();
     applyRuntimeCapabilities();
     renderSources(Array.isArray(account.lxSource) ? account.lxSource : []); $('config-message').textContent = '';
     showStep('account-config');
@@ -431,6 +444,8 @@
   function applyRuntimeCapabilities() {
     const supported = state.status?.accountLxSources !== false && state.account?.platform !== 'ytmusic';
     $('account-lx-source-settings').classList.toggle('hidden', !supported);
+    // YouTube Music 不走洛雪源，策略无意义，整块隐藏。
+    $('account-audio-priority-field').classList.toggle('hidden', state.account?.platform === 'ytmusic');
   }
 
   async function openDesktopAccount(apiAccessKey) {
@@ -493,7 +508,8 @@
         : [...document.querySelectorAll('#lx-source-list input')].map((input) => input.value.trim()).filter(Boolean);
       const account = await jsonRequest('/login/api/account/config', 'PUT', {
         api_access_key: state.account.apiAccessKey, name: $('account-name').value.trim(),
-        stateless: $('account-stateless').checked, useLuoxue: $('account-luoxue').checked, lxSource
+        stateless: $('account-stateless').checked, useLuoxue: $('account-luoxue').checked,
+        audioSourcePriority: $('account-audio-priority').value, lxSource
       });
       if (sequence !== state.loginSequence) return;
       state.account = account; $('config-message').textContent = '配置已保存'; $('config-message').className = 'message success';
@@ -602,6 +618,8 @@
   $('relogin').addEventListener('click', () => selectLoginMethod(state.account?.platform === 'ytmusic' ? 'cookie' : 'qr'));
   $('refresh-auth').addEventListener('click', refreshAuthorization);
   $('add-lx-source').addEventListener('click', () => addSourceInput()); $('save-config').addEventListener('click', saveConfig);
+  $('account-audio-priority').addEventListener('change', updateAudioPriority);
+  $('account-luoxue').addEventListener('change', updateAudioPriority);
   $('retry-backend').addEventListener('click', async () => { try { await window.__TAURI__.core.invoke('restart_backend'); initializeBackend(); } catch (error) { $('splash-message').textContent = error.message; } });
   initializeBackend();
 })();

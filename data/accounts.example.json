@@ -6,6 +6,7 @@
     "api_access_key": "CHANGE_ME_TO_A_UNIQUE_RANDOM_KEY",
     "stateless": false,
     "useLuoxue": true,
+    "audioSourcePriority": "lx",
     "lxSource": []
   },
   {
@@ -15,6 +16,7 @@
     "api_access_key": "CHANGE_ME_TO_ANOTHER_UNIQUE_RANDOM_KEY",
     "stateless": false,
     "useLuoxue": true,
+    "audioSourcePriority": "lx",
     "lxSource": []
   }
 ]
