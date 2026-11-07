@@ -11,6 +11,46 @@ describe('QQClient', () => {
     delete global.__musicPlatformFactory__
   })
 
+  test.each([true, false])('详情隐藏创建者时仅本人创建列表可恢复权限：%s', async (owned) => {
+    const callModule = jest.fn((route) => {
+      if (route === 'playlist/detail') return Promise.resolve({ code: 200, playlist: {
+        id: '987654321', name: 'Playlist', creator: { userId: 0 }, tracks: []
+      } })
+      if (route === 'user/playlist/created') return Promise.resolve({ code: 200, playlist: owned ? [
+        { id: '987654321', name: 'Playlist', creator: { userId: 123, nickname: 'Me' } }
+      ] : [] })
+      throw new Error('Unexpected route')
+    })
+    global.__musicPlatformFactory__.getPlatform.mockReturnValue({ callModule })
+    const client = new QQClient('uin=o123; qm_keyst=key')
+    const result = await client.getPlaylistDetail('987654321', 0)
+    expect(result.creator.id).toBe(owned ? '123' : '0')
+    expect(result.tracks).toEqual([])
+  })
+
+  test('归属查询失败仍可浏览歌单，且不授予当前账号编辑权限', async () => {
+    const callModule = jest.fn((route) => {
+      if (route === 'playlist/detail') return Promise.resolve({ code: 200, playlist: {
+        id: '987654321', name: 'Playlist', creator: { userId: 0 }, tracks: []
+      } })
+      throw new Error('User playlists unavailable')
+    })
+    global.__musicPlatformFactory__.getPlatform.mockReturnValue({ callModule })
+    const detail = await new QQClient('uin=o123; qm_keyst=key').getPlaylistDetail('987654321', 0)
+    expect(detail.creator.id).toBe('0')
+  })
+
+  test('详情已有有效的其他创建者 ID 时不查询本人歌单列表', async () => {
+    const callModule = jest.fn().mockResolvedValue({ code: 200, playlist: {
+      id: '987654321', name: 'Other', creator: { userId: 456 }, tracks: []
+    } })
+    global.__musicPlatformFactory__.getPlatform.mockReturnValue({ callModule })
+    const detail = await new QQClient('uin=o123; qm_keyst=key').getPlaylistDetail('987654321', 0)
+    expect(detail.creator.id).toBe('456')
+    expect(callModule).toHaveBeenCalledTimes(1)
+    expect(callModule).toHaveBeenCalledWith('playlist/detail', expect.anything())
+  })
+
   test('从 cookie 解析 QQ 凭证', () => {
     expect(normalizeQQCredentials('uin=o123456; qm_keyst=abc')).toEqual({
       uin: '123456',

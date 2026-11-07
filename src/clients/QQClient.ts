@@ -125,7 +125,17 @@ export class QQClient extends MusicClientBase {
       throw new NotFoundError('Playlist not found');
     }
     const tracks = trackLimit !== 0 ? (playlist.tracks || []).slice(0, upstreamLimit).map((item: any) => this.withFavoriteTrack(mapTrack(item))) : [];
-    return this.playlistFavorites.apply({ ...mapPlaylist(playlist), tracks },
+    const mapped = mapPlaylist(playlist);
+    // QQ 详情会将 host_uin 置为 0；仅在身份缺失时通过本人创建列表核实归属。
+    // 有效的其他创建者 ID 必须保留，不能因与当前账号不同就额外查询。
+    const creatorID = mapped.creator?.id.trim();
+    if ((!creatorID || creatorID === '0') && this.uin) {
+      // 权限补充失败时保留原始详情，不能阻断公共浏览，也不能授予编辑权限。
+      const created = await this.call('user_playlist_created').catch(() => null);
+      const owned = (created?.playlist || []).find((item: any) => String(item.id) === id);
+      if (owned) mapped.creator = { ...mapPlaylist(owned).creator!, id: this.uin };
+    }
+    return this.playlistFavorites.apply({ ...mapped, tracks },
       typeof playlist.subscribed === 'boolean' ? playlist.subscribed : undefined);
   }
 
