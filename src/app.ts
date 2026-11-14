@@ -5,7 +5,7 @@ import cookieParser from 'cookie-parser';
 import { createWowRouter, openApiDocument } from 'aduoer-wow-sdk';
 import { createWowContextResolver } from './adapter';
 import { preloadData } from './onload';
-import { APIError } from './errors';
+import { APIError, MissingCookieError } from './errors';
 import { AccountSessionRegistry, extractAuthorizationToken, loadAccountSessions } from './accounts';
 import type { AccountStore } from './storage';
 import { createLoginRouter } from './login';
@@ -336,7 +336,10 @@ class MultiPlatformServer {
     });
     this.app!.use(createWowRouter({
       resolveContext: createWowContextResolver(this.accountSessions, this.lxSourceManager),
-      onError: (error, request) => this.logger.error('Wow v1 request failed', error, { url: request.url })
+      onError: (error, request) => {
+        if (error instanceof MissingCookieError) return;
+        this.logger.error('Wow v1 request failed', error, { url: request.url });
+      }
     }));
     if (this.preload) {
       void preloadData(platformFactory, this.accountSessions, this.lxSourceManager).catch((error) => {

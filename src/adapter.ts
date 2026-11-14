@@ -10,6 +10,7 @@ import type { MusicPlatform } from './types';
 import type { LxTrackUrlResolver } from './lx-resource';
 import { createStreamUrl } from './ytmusic/stream';
 import { hasValidAudioUrl } from './trackUrl';
+import { MissingCookieError } from './errors';
 
 /** 根据私有平台账号创建符合公开 SDK 契约的 Adapter。 */
 export function createMusicClient(
@@ -37,6 +38,11 @@ export function createAdapter(
   streamOrigin?: string
 ): QQClient | NeteaseClient | YTMusicClient | KugouClient {
   const client = createMusicClient(account.platform, account.cookie, account.favoriteTrackIds, account.favoriteArtistIds, account.favoriteAlbumIds, account.userPlaylistIds, account.deviceState, account);
+  if (!account.cookie.trim()) {
+    // 统一覆盖所有平台，避免游客账号请求个性化推荐上游。
+    client.getDailyTracks = async () => { throw new MissingCookieError(); };
+    client.getRoamTracks = async () => { throw new MissingCookieError(); };
+  }
   client.playlistFavorites = account.playlistFavorites;
   const createPlaylist = client.createPlaylist.bind(client);
   client.createPlaylist = async (name) => {

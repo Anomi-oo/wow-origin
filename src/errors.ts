@@ -21,6 +21,13 @@ export class NotFoundError extends APIError {
   }
 }
 
+/** 未配置 Cookie 时，个性化推荐不可用；属于正常的跳过请求。 */
+export class MissingCookieError extends NotFoundError {
+  constructor() {
+    super('账号未配置 Cookie，日推和漫游不可用');
+  }
+}
+
 export class UnplayableError extends APIError {
   constructor(message: string) {
     super(message, 422);

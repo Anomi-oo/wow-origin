@@ -221,6 +221,9 @@ export async function ensureQQLoginFresh(
   options: LoginRefreshOptions
 ): Promise<void> {
   if (session.platform !== 'qq' || !session.cookie.trim()) return;
+  const currentCookie = parseCookie(session.cookie);
+  const uin = (currentCookie.uin || currentCookie.musicid || '').replace(/^o/, '');
+  if (!uin || !(currentCookie.qm_keyst || currentCookie.musickey)) return;
 
   const key = session.apiAccessKey;
   const now = Date.now();
@@ -231,7 +234,6 @@ export async function ensureQQLoginFresh(
 
   const checkedCookie = session.cookie;
   const check = (async () => {
-    const currentCookie = parseCookie(checkedCookie);
     const result = await options.platformFactory.getPlatform('qqmusic').callModule(LOGIN_CHECK_EXPIRED_ROUTE, {
       query: { ...currentCookie, platform: 'qqmusic', timestamp: Date.now() },
       body: {},
