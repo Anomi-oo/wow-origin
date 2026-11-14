@@ -38,7 +38,7 @@ beforeEach(() => {
 describe('Logger', () => {
   let logger
 
-  test('统一接口的所有级别均带时间和账号前缀', () => {
+  test('统一接口的所有级别均先显示完整时间，再显示账号', () => {
     const previous = process.env.LOG_LEVEL
     process.env.LOG_LEVEL = 'debug'
     try {
@@ -48,7 +48,7 @@ describe('Logger', () => {
       })
       expect(consoleOutput).toHaveLength(4)
       for (const line of consoleOutput) {
-        expect(line.replace(/\x1b\[[0-9;]*m/g, '')).toMatch(/^\[account="测试账号\[12\]"\] \d{2}:\d{2}:\d{2} /)
+        expect(line.replace(/\x1b\[[0-9;]*m/g, '')).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} \[account="测试账号\[12\]"\] /)
       }
     } finally {
       process.env.LOG_LEVEL = previous
@@ -281,9 +281,14 @@ describe('Logger', () => {
   })
 
   describe('辅助方法', () => {
-    test('getShortTime应该返回时间字符串', () => {
-      const time = logger.getShortTime()
-      expect(time).toMatch(/\d{2}:\d{2}:\d{2}/)
+    test('getTimestamp包含本地日期和三位毫秒', () => {
+      jest.useFakeTimers().setSystemTime(new Date(2026, 10, 14, 13, 58, 20, 7))
+      try {
+        const time = logger.getTimestamp().replace(/\x1b\[[0-9;]*m/g, '')
+        expect(time).toBe('2026-11-14 13:58:20.007')
+      } finally {
+        jest.useRealTimers()
+      }
     })
 
     test('getLevelColor应该返回颜色代码', () => {
@@ -293,11 +298,11 @@ describe('Logger', () => {
       expect(logger.getLevelColor('debug')).toBe(logger.colors.gray)
     })
 
-    test('getLevelIcon应该返回图标', () => {
-      expect(logger.getLevelIcon('info')).toBe(logger.icons.info)
+    test('仅警告和错误级别返回图标', () => {
+      expect(logger.getLevelIcon('info')).toBe('')
       expect(logger.getLevelIcon('warn')).toBe(logger.icons.warning)
       expect(logger.getLevelIcon('error')).toBe(logger.icons.error)
-      expect(logger.getLevelIcon('debug')).toBe(logger.icons.debug)
+      expect(logger.getLevelIcon('debug')).toBe('')
     })
 
     test('formatContextTag应该格式化上下文标签', () => {
@@ -323,12 +328,13 @@ describe('Logger', () => {
       expect(consoleOutput[0]).toContain('Operation completed')
     })
 
-    test('应该使用自定义emoji', async () => {
+    test('普通日志不显示自定义图标', async () => {
       logger.logLevel = 'info'
-      logger.compact('star', 'Custom emoji', 'info')
+      logger.compact('⭐', 'Custom emoji', 'info')
       await globalLogBuffer.flush()
 
       expect(consoleOutput[0]).toContain('Custom emoji')
+      expect(consoleOutput[0]).not.toContain('⭐')
     })
   })
 

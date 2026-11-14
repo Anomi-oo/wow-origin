@@ -223,6 +223,51 @@ describe('LX resource', () => {
     }
   })
 
+  test.each([false, true])('请求完成后只记录一条结果，插件过程日志不输出 (失败=%s)', async failure => {
+    const url = 'https://source.test/quiet.js'
+    const hash = md5(url)
+    const cacheDirectory = path.join(temporaryDirectory, 'lx-sources')
+    await fs.mkdir(cacheDirectory, { recursive: true })
+    const script = createSourceScript('测试源', `{
+      console.info('开始请求')
+      console.log('响应内容', { message: '成功响应不应打印' })
+      console.warn('上游提示')
+      console.error('插件错误详情')
+      await new Promise(resolve => setTimeout(resolve, 20))
+      ${failure ? "throw new Error('上游不可用')" : "return 'https://audio.test/song.flac'"}
+    }`)
+    await fs.writeFile(getLxSourceCachePath(cacheDirectory, hash), script)
+    const manager = new LxSourceManager({ configs: [{ url, hash, order: 0 }], cacheDirectory })
+    const resultLog = jest.spyOn(require('../../../dist/lx-resource/diagnostics'), 'logLxResolution').mockImplementation(() => {})
+    const pluginLog = jest.spyOn(manager, 'log')
+    try {
+      manager.start()
+      await manager.waitForInitialLoad()
+      resultLog.mockClear()
+      pluginLog.mockClear()
+      const pending = manager.resolveTrackUrl('qq', 'song-id', 'lossless', [], { allowFallback: false })
+      expect(resultLog).not.toHaveBeenCalled()
+      const result = await pending
+      expect(Boolean(result)).toBe(!failure)
+      expect(pluginLog).not.toHaveBeenCalled()
+      expect(resultLog).toHaveBeenCalledTimes(1)
+      const [level, event, data] = resultLog.mock.calls[0]
+      expect(level).toBe(failure ? 'error' : 'info')
+      expect(event).toBe(failure ? '获取音频失败' : '获取音频成功')
+      expect(data).toMatchObject({ source: `测试源#${hash.slice(0, 6)}`, platform: 'qq', id: 'song-id', quality: 'flac', durationMs: expect.any(Number) })
+      expect(JSON.stringify(data)).not.toContain('成功响应不应打印')
+      if (failure) {
+        expect(data.error.message).toBe('上游不可用')
+        expect(JSON.stringify(data.error.upstream)).toContain('插件错误详情')
+      } else {
+        expect(data.error).toBeUndefined()
+        expect(data.upstream).toBeUndefined()
+      }
+    } finally {
+      await manager.stop()
+    }
+  })
+
   test('从 MD5 缓存异步注册并返回 Wow TrackUrl', async () => {
     const url = 'https://source.test/cached.js'
     const hash = md5(url)

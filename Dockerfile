@@ -7,6 +7,7 @@ RUN npm ci
 
 COPY tsconfig*.json ./
 COPY types ./types
+COPY core ./core
 COPY src ./src
 # 网页样式在构建阶段由 web/styles.css 编译，Tailwind 还要扫描 public 里的页面与脚本
 COPY web ./web

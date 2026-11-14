@@ -52,7 +52,7 @@ async function start() {
       if (shuttingDown) return;
       shuttingDown = true;
       const { red, bright, reset } = WelcomePage.colors;
-      log.info(`\n${red}${bright}🛑 ${signal} received, shutting down gracefully...${reset}`);
+      log.info(`\n${red}${bright}${signal} received, shutting down gracefully...${reset}`);
       app.loginRefreshScheduler?.stop();
       app.lxSourceUpdateScheduler?.stop();
 
@@ -62,7 +62,7 @@ async function start() {
         });
       }
       await app.lxSourceManager?.stop();
-      log.info(`${red}👋 Server closed${reset}`);
+      log.info(`${red}Server closed${reset}`);
       process.exit(0);
     };
 

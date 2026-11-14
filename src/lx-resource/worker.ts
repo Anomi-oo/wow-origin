@@ -74,8 +74,15 @@ function safeLogValue(value: unknown): string {
 
 function emitLog(level: LxLogLevel, args: unknown[]): void {
   const context = invocationContext.getStore();
-  const prefix = context ? `[request=${context.requestId} platform=${context.invocation.source} id=${context.invocation.musicInfo.id} quality=${context.invocation.quality}] ` : '';
-  const message = prefix + args.map(safeLogValue).map(safeDiagnosticText).join(' ').slice(0, 4096);
+  // 请求过程由宿主在完成后统一记录，插件输出只用于失败诊断。
+  if (context) {
+    if (level === 'error' || level === 'warn') {
+      context.upstream.push({ message: args.map(safeLogValue).map(safeDiagnosticText).join(' ').slice(0, 1024) });
+      if (context.upstream.length > 5) context.upstream.shift();
+    }
+    return;
+  }
+  const message = args.map(safeLogValue).map(safeDiagnosticText).join(' ').slice(0, 4096);
   port.postMessage({ type: 'log', level, message, context: getRequestContext() });
 }
 

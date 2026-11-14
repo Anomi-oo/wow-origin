@@ -132,48 +132,31 @@ export class LxSourceManager implements LxTrackUrlResolver, LxSourceLifecycle {
     accountSources: readonly string[] = [],
     options: { allowFallback?: boolean } = {}
   ): Promise<TrackUrl | undefined> {
-    const context = { platform, id, quality };
-    if (this.stopped) {
-      logLxResolution('info', '跳过洛雪解析', { ...context, reason: '管理器已停止' });
-      return undefined;
-    }
+    if (this.stopped) return undefined;
     const deadline = Date.now() + SOURCE_CHAIN_TIMEOUT_MS;
     const selectedConfigs = new Map<string, LxSourceConfig>();
     createLxSourceConfigs(accountSources).forEach((config) => selectedConfigs.set(config.hash, config));
     this.globalConfigs.forEach((config) => selectedConfigs.set(config.hash, config));
-    if (!selectedConfigs.size) logLxResolution('info', '跳过洛雪解析', { ...context, reason: '没有配置洛雪源' });
 
     for (const config of selectedConfigs.values()) {
       const remaining = deadline - Date.now();
-      if (remaining <= 0) {
-        logLxResolution('warn', '洛雪源链超时', context);
-        break;
-      }
+      if (remaining <= 0) break;
       const source = this.sources.get(config.hash);
-      const sourceContext = { ...context, source: source?.name || sourceLabel('', config.hash), sourceId: config.hash, scope: accountSources.includes(config.url) ? 'account' : 'global' };
-      if (!source) {
-        logLxResolution('info', '跳过洛雪源', { ...sourceContext, reason: '源尚未加载或注册失败' });
-        continue;
-      }
+      if (!source) continue;
       const lxPlatform = selectLxPlatform(platform, source.capabilities);
-      if (!lxPlatform) {
-        logLxResolution('info', '跳过洛雪源', { ...sourceContext, reason: '源不支持该平台' });
-        continue;
-      }
+      if (!lxPlatform) continue;
       const capability = source.capabilities[lxPlatform];
       if (!capability) continue;
       const exactQuality = getExactLxQuality(platform, quality, capability.qualities);
       const candidates = options.allowFallback === false
         ? (exactQuality ? [exactQuality] : [])
         : getLxQualityCandidates(quality, capability.qualities, platform);
-      if (!candidates.length) logLxResolution('info', '跳过洛雪源', { ...sourceContext, lxPlatform, reason: '源不支持该音质', supportedQualities: capability.qualities });
       for (const lxQuality of candidates) {
         const candidateRemaining = deadline - Date.now();
         if (candidateRemaining <= 0) break;
-        const attempt = { ...sourceContext, lxPlatform, lxQuality };
+        const attempt = { source: sourceLabel(source.name, config.hash), platform, id, quality: lxQuality };
         const startedAt = Date.now();
         let upstream: Record<string, unknown>[] = [];
-        logLxResolution('info', '开始获取音频', attempt);
         try {
           const result = await source.runtime.invoke({
             source: lxPlatform,
@@ -194,11 +177,10 @@ export class LxSourceManager implements LxTrackUrlResolver, LxSourceLifecycle {
         } catch (error) {
           const diagnostics = diagnosticError(error);
           if (upstream.length) diagnostics.upstream = upstream;
-          logLxResolution('warn', '获取音频失败，继续尝试', { ...attempt, durationMs: Date.now() - startedAt, error: diagnostics });
+          logLxResolution('error', '获取音频失败', { ...attempt, durationMs: Date.now() - startedAt, error: diagnostics });
         }
       }
     }
-    logLxResolution('info', '洛雪源链未获取到音频', context);
     return undefined;
   }
 

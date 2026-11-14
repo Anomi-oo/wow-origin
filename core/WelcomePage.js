@@ -26,7 +26,7 @@ class WelcomePage {
     const { cyan, bright, reset, gray } = this.colors
 
     // 使用padLine方法确保完美对齐
-    const titleLine = this.padLine(`          🎵 Multi-Platform Music API Server `)
+    const titleLine = this.padLine(`          Multi-Platform Music API Server `)
     const subtitleLine = this.padLine(`    ${gray}A unified API gateway for multiple music platforms${reset} `)
     const emptyLine = this.padLine('')
 
@@ -46,7 +46,7 @@ class WelcomePage {
    */
   static showStartupStatus() {
     const { yellow, bright, reset } = this.colors
-    log.info(`${yellow}${bright}⚡ Starting server...${reset}`)
+    log.info(`${yellow}${bright}Starting server...${reset}`)
     log.info()
   }
 
@@ -84,7 +84,7 @@ class WelcomePage {
     const { green, bright, reset, cyan, white, gray } = this.colors
 
     log.info()
-    log.info(`${green}${bright}🚀 Server Ready!${reset}`)
+    log.info(`${green}${bright}Server Ready!${reset}`)
     log.info()
 
     // 构建内容行
@@ -108,7 +108,7 @@ class WelcomePage {
     log.info()
 
     // 快速指南
-    log.info(`${gray}💡 Quick Start:${reset}`)
+    log.info(`${gray}Quick Start:${reset}`)
     log.info(`${gray}   GET  /${reset} → API documentation`)
     log.info(`${gray}   GET  ${this.randomTips()} ${reset} → Start!`)
     log.info()

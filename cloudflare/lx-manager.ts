@@ -7,9 +7,9 @@ import type { AppLxSourceManager } from '../src/app';
 import type { MusicPlatform } from '../src/types';
 import type { LxPlatform, LxQuality } from '../src/lx-resource/types';
 import { getExactLxQuality } from '../src/lx-resource/quality';
-import { getLxQualityCandidates, mapLxQualityToTrackUrl, selectLxPlatform } from '../src/lx-resource/config';
+import { getLxQualityCandidates, mapLxQualityToTrackUrl, selectLxPlatform, sourceLabel } from '../src/lx-resource/config';
 import { bundledLxSource, installBundledLxSource } from './generated/lx-source';
-import { diagnosticError, logLxResolution, upstreamResponse } from '../src/lx-resource/diagnostics';
+import { diagnosticError, logLxResolution, safeDiagnosticText, upstreamResponse } from '../src/lx-resource/diagnostics';
 
 const log = require('../core/Logger').createConsole({ component: 'lx-source' });
 
@@ -160,10 +160,16 @@ export class CloudflareLxSourceManager implements AppLxSourceManager {
       env: 'cloudflare'
     };
     const sourceConsole = Object.create(console) as Console;
-    for (const level of ['log', 'info', 'warn', 'error', 'debug'] as const) {
+    for (const level of ['log', 'info', 'warn', 'error', 'debug', 'group', 'groupCollapsed', 'groupEnd'] as const) {
       sourceConsole[level] = (...args: unknown[]) => {
+        if (requestContext.getStore()) {
+          if (level === 'error' || level === 'warn') {
+            recordUpstream({ message: safeDiagnosticText(args.map(String).join(' ')) });
+          }
+          return;
+        }
         const prefix = `[lx-source:${bundledLxSource.name || '未命名源'}#${bundledLxSource.digest?.slice(0, 6) || ''}]`;
-        log[level](prefix, ...args);
+        log[level.startsWith('group') ? 'info' : level](prefix, ...args);
       };
     }
     const sandbox = { lx, console: sourceConsole, setTimeout, clearTimeout, URL, URLSearchParams, TextEncoder, TextDecoder, atob, btoa };
@@ -177,28 +183,17 @@ export class CloudflareLxSourceManager implements AppLxSourceManager {
   async stop(): Promise<void> {}
 
   async resolveTrackUrl(platform: MusicPlatform, id: string, requestedQuality?: string, _accountSources: readonly string[] = [], options: { allowFallback?: boolean } = {}): Promise<TrackUrl | undefined> {
-    const context = { platform, id, quality: requestedQuality, source: bundledLxSource.name || '未命名源', sourceId: bundledLxSource.digest, scope: 'bundled' };
-    if (!this.requestHandler) {
-      logLxResolution('info', '跳过洛雪解析', { ...context, reason: '没有已加载的洛雪源' });
-      return undefined;
-    }
+    if (!this.requestHandler) return undefined;
     const source = selectLxPlatform(platform, this.capabilities);
-    if (!source) {
-      logLxResolution('info', '跳过洛雪源', { ...context, reason: '源不支持该平台' });
-      return undefined;
-    }
+    if (!source) return undefined;
     const supported = this.capabilities[source]?.qualities || [];
     const quality = options.allowFallback === false
       ? getExactLxQuality(platform, requestedQuality, supported)
       : platform === 'kugou' ? getLxQualityCandidates(requestedQuality, supported, platform)[0] : selectQuality(requestedQuality, supported);
-    if (!quality) {
-      logLxResolution('info', '跳过洛雪源', { ...context, lxPlatform: source, reason: '源不支持该音质', supportedQualities: supported });
-      return undefined;
-    }
-    const attempt = { ...context, lxPlatform: source, lxQuality: quality };
+    if (!quality) return undefined;
+    const attempt = { source: sourceLabel(bundledLxSource.name || '未命名源', bundledLxSource.digest), platform, id, quality };
     const startedAt = Date.now();
     const upstream: Record<string, unknown>[] = [];
-    logLxResolution('info', '开始获取音频', attempt);
     const invocation = requestContext.run(upstream, () => Promise.resolve().then(() => this.requestHandler!({
       source,
       action: 'musicUrl',
@@ -228,7 +223,7 @@ export class CloudflareLxSourceManager implements AppLxSourceManager {
       logLxResolution('info', '获取音频成功', { ...attempt, durationMs: Date.now() - startedAt });
       return resolved;
     } catch (error) {
-      logLxResolution('warn', '获取音频失败', { ...attempt, durationMs: Date.now() - startedAt, error: diagnosticError(error), upstream });
+      logLxResolution('error', '获取音频失败', { ...attempt, durationMs: Date.now() - startedAt, error: diagnosticError(error), upstream });
       throw error;
     } finally {
       if (timeout) clearTimeout(timeout);
