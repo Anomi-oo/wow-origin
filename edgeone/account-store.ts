@@ -1,3 +1,5 @@
+const log = require('../core/Logger').createConsole({ component: 'edgeone' });
+
 import fs from 'node:fs';
 import fsPromises from 'node:fs/promises';
 import path from 'node:path';
@@ -147,7 +149,7 @@ export class EdgeOneAccountStore implements AccountStore {
         blob = getStore(storeName) as unknown as EdgeOneBlobStore;
       } catch (error) {
         if (process.env.EDGEONE_REQUIRE_BLOB === '1') throw error;
-        console.warn('[edgeone] Blob 不可用，账号将使用本地文件/内存存储', error);
+        log.warn('[edgeone] Blob 不可用，账号将使用本地文件/内存存储', error);
       }
     }
 
@@ -166,13 +168,13 @@ export class EdgeOneAccountStore implements AccountStore {
             text = await blob.get(key, { type: 'text', consistency: 'strong' });
           } catch (error) {
             // 单个对象读取失败不应让所有账号退回本地存储。
-            console.warn(`[edgeone] 读取账号 Blob 失败: ${key}`, error);
+            log.warn(`[edgeone] 读取账号 Blob 失败: ${key}`, error);
             continue;
           }
           if (text === null) continue;
           const account = parseStoredAccount(text);
           if (!account) {
-            console.warn(`[edgeone] 忽略无法解析的账号 Blob: ${key}`);
+            log.warn(`[edgeone] 忽略无法解析的账号 Blob: ${key}`);
             continue;
           }
           accounts.push(account);
@@ -191,7 +193,7 @@ export class EdgeOneAccountStore implements AccountStore {
               legacyDocument = true;
             }
           } catch (error) {
-            console.warn('[edgeone] 旧账号 Blob 文档格式无效，已忽略', error);
+            log.warn('[edgeone] 旧账号 Blob 文档格式无效，已忽略', error);
           }
         }
 
@@ -207,7 +209,7 @@ export class EdgeOneAccountStore implements AccountStore {
           for (const account of accounts) {
             const key = accountBlobKey(account);
             if (!key) {
-              console.warn('[edgeone] 旧账号 Blob 中的账号缺少 api_access_key，无法迁移');
+              log.warn('[edgeone] 旧账号 Blob 中的账号缺少 api_access_key，无法迁移');
               continue;
             }
             store.pending.set(key, account);
@@ -217,7 +219,7 @@ export class EdgeOneAccountStore implements AccountStore {
         return store;
       } catch (error) {
         if (process.env.EDGEONE_REQUIRE_BLOB === '1') throw error;
-        console.warn('[edgeone] 读取 Blob 账号失败，回退到本地文件/内存存储', error);
+        log.warn('[edgeone] 读取 Blob 账号失败，回退到本地文件/内存存储', error);
       }
     }
 

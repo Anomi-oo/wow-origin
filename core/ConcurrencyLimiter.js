@@ -9,6 +9,8 @@
  * 4. 提供性能统计（活跃请求数、队列长度等）
  */
 
+const { getRequestContext, runWithRequestContext } = require('./RequestContext')
+
 class ConcurrencyLimiter {
   constructor(options = {}) {
     this.maxConcurrent = options.maxConcurrent || 300  // 最大并发数 (默认300)
@@ -39,7 +41,9 @@ class ConcurrencyLimiter {
     }
 
     // 需要排队等待
-    return this._enqueue(task)
+    // 排队任务可能由另一个请求释放的槽位触发，需要恢复入队时的账号上下文。
+    const context = getRequestContext()
+    return this._enqueue(() => runWithRequestContext(context, task))
   }
 
   /**

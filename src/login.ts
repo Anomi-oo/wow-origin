@@ -1,3 +1,5 @@
+const log = require('../core/Logger').createConsole({ component: 'login' });
+
 import path from 'node:path';
 import express, { NextFunction, Request, Response, Router } from 'express';
 import {
@@ -291,7 +293,7 @@ export function createLoginRouter({
         }
       }
     })().catch((error) => {
-      console.warn('[login] 清理已删除账号的登录会话失败', error);
+      log.warn('[login] 清理已删除账号的登录会话失败', error);
     });
   });
 
@@ -459,7 +461,7 @@ export function createLoginRouter({
         if (!await pendingLogins.get(token)) throw new BadRequestError('登录会话已取消');
         const data = await saveLogin(pending, cookie, name);
         await pendingLogins.delete(token).catch((error) => {
-          console.warn('[login] 清理已完成的扫码会话失败', error);
+          log.warn('[login] 清理已完成的扫码会话失败', error);
         });
         res.json({ code: 200, data });
         return;
@@ -626,7 +628,7 @@ export function createLoginRouter({
       const result = await callLoginModule(platformFactory, pending.platform, 'login/phone/check', { token, code, ...(pending.platform === 'kugou' ? { phone: pending.phone, cookie: pending.kugouCookie } : {}) });
       const data = await saveLogin(pending, serializeCookie(result.cookie), result.body?.nickname);
       await pendingPhones.delete(token).catch((error) => {
-        console.warn('[login] 清理已完成的手机登录会话失败', error);
+        log.warn('[login] 清理已完成的手机登录会话失败', error);
       });
       res.json({ code: 200, data });
     } catch (error) { next(error); }

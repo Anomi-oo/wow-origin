@@ -6,6 +6,7 @@ import { createWowRouter, openApiDocument } from 'aduoer-wow-sdk';
 import { createWowContextResolver } from './adapter';
 import { preloadData } from './onload';
 import { APIError, MissingCookieError } from './errors';
+import { runWithAccountContext } from '../core/RequestContext';
 import { AccountSessionRegistry, extractAuthorizationToken, loadAccountSessions } from './accounts';
 import type { AccountStore } from './storage';
 import { createLoginRouter } from './login';
@@ -236,19 +237,20 @@ class MultiPlatformServer {
         }
       }
       const session = this.accountSessions.byAccessKey.get(key);
-      if (!session || session.platform !== 'qq') return next();
-      try {
-        await ensureQQLoginFresh(session, {
-          registry: this.accountSessions,
-          platformFactory,
-          accountStore: this.accountStore,
-          logger: this.logger
-        });
+      return runWithAccountContext(session, async () => {
+        if (!session || session.platform !== 'qq') return next();
+        try {
+          await ensureQQLoginFresh(session, {
+            registry: this.accountSessions,
+            platformFactory,
+            accountStore: this.accountStore,
+            logger: this.logger
+          });
+        } catch (error) {
+          this.logger.error('QQ 登录状态检查或刷新失败，继续使用当前凭证', error);
+        }
         next();
-      } catch (error) {
-        this.logger.error('QQ 登录状态检查或刷新失败，继续使用当前凭证', error);
-        next();
-      }
+      });
     });
     this.app!.get('/v1/ytmusic/audio/:id', async (req: Request, res: Response, next: NextFunction) => {
       const verified = verifyStreamRequest(this.accountSessions.sessions, String(req.params.id), req.query);
@@ -410,6 +412,7 @@ class MultiPlatformServer {
           if (!existing || existing.platform !== session.platform) return session;
           const cookieChanged = existing.cookie !== session.cookie;
           const previousCookie = existing.cookie;
+          existing.id = session.id;
           existing.name = session.name;
           existing.cookie = session.cookie;
           existing.stateless = session.stateless;

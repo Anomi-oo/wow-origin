@@ -1,3 +1,5 @@
+const log = require('../core/Logger').createConsole({ component: 'accounts' });
+
 import { type KugouAccountContext, kugouUserId, kugouEdition } from './kugouState';
 import { PlaylistFavorites } from './playlistFavorites';
 import path from 'path';
@@ -6,6 +8,7 @@ import type { MusicPlatform } from './types';
 import { createLocalAccountStore, type AccountStore } from './storage/accounts';
 
 export interface RawMusicAccount {
+  id?: number | string;
   platform?: unknown;
   name?: unknown;
   cookie?: unknown;
@@ -23,6 +26,7 @@ export type AudioSourcePriority = 'lx' | 'account';
 export const DEFAULT_AUDIO_SOURCE_PRIORITY: AudioSourcePriority = 'lx';
 
 export interface MusicAccountSession extends KugouAccountContext {
+  id?: number | string;
   platform: MusicPlatform;
   name: string;
   cookie: string;
@@ -182,7 +186,7 @@ export function normalizeAccountLxSources(value: unknown): string[] {
 function loadAccountLxSources(value: unknown, accountName: string): string[] {
   if (value === undefined) return [];
   if (!Array.isArray(value)) {
-    console.warn(`[accounts] 账号 "${accountName}" 的 lxSource 必须是数组，已按空数组处理`);
+    log.warn(`[accounts] 账号 "${accountName}" 的 lxSource 必须是数组，已按空数组处理`);
     return [];
   }
 
@@ -191,7 +195,7 @@ function loadAccountLxSources(value: unknown, accountName: string): string[] {
   value.forEach((item) => {
     const source = typeof item === 'string' ? item.trim() : '';
     if (!source || !isHttpUrl(source)) {
-      console.warn(`[accounts] 账号 "${accountName}" 包含无效的 lxSource，已忽略`);
+      log.warn(`[accounts] 账号 "${accountName}" 包含无效的 lxSource，已忽略`);
       return;
     }
     if (seen.has(source)) return;
@@ -199,14 +203,14 @@ function loadAccountLxSources(value: unknown, accountName: string): string[] {
     if (valid.length < 10) valid.push(source);
   });
   if (seen.size > 10) {
-    console.warn(`[accounts] 账号 "${accountName}" 的 lxSource 超过 10 个，仅使用前 10 个`);
+    log.warn(`[accounts] 账号 "${accountName}" 的 lxSource 超过 10 个，仅使用前 10 个`);
   }
   return valid;
 }
 
 function printTemplate(): void {
-  console.log('[accounts] accounts.json 配置模板:');
-  console.log(JSON.stringify(sessionsTemplate, null, 2));
+  log.info('[accounts] accounts.json 配置模板:');
+  log.info(JSON.stringify(sessionsTemplate, null, 2));
 }
 
 export function accountsFilePath(workDir: string = process.cwd()): string {
@@ -263,7 +267,7 @@ export function loadAccountSessions(storeInput: AccountStoreInput = process.cwd(
     store = resolveAccountStore(storeInput);
     rawAccounts = store.list();
   } catch (error) {
-    console.error('[accounts] 读取账号数据库失败', error);
+    log.error('[accounts] 读取账号数据库失败', error);
     printTemplate();
     return emptyRegistry;
   }
@@ -274,14 +278,14 @@ export function loadAccountSessions(storeInput: AccountStoreInput = process.cwd(
 
   rawAccounts.forEach((raw, index) => {
     if (!raw || typeof raw !== 'object') {
-      console.warn(`[accounts] 忽略第 ${index + 1} 个账号：账号配置必须是对象`);
+      log.warn(`[accounts] 忽略第 ${index + 1} 个账号：账号配置必须是对象`);
       return;
     }
 
     const account = raw as RawMusicAccount;
     const apiAccessKey = String(account.api_access_key || '').trim();
     if (!apiAccessKey) {
-      console.warn(`[accounts] 忽略第 ${index + 1} 个账号：api_access_key 未填写或为空`);
+      log.warn(`[accounts] 忽略第 ${index + 1} 个账号：api_access_key 未填写或为空`);
       return;
     }
 
@@ -293,17 +297,18 @@ export function loadAccountSessions(storeInput: AccountStoreInput = process.cwd(
         ? { value: false, invalid: false }
         : normalizeAccountUseLuoxue(account.useLuoxue);
       if (useLuoxue.invalid) {
-        console.warn(
+        log.warn(
           `[accounts] 账号 "${accountName}" 的 useLuoxue 必须是 boolean，已按 false 处理`
         );
       }
       const audioSourcePriority = normalizeAudioSourcePriority(account.audioSourcePriority);
       if (audioSourcePriority.invalid) {
-        console.warn(
+        log.warn(
           `[accounts] 账号 "${accountName}" 的 audioSourcePriority 必须是 lx 或 account，已按 lx 处理`
         );
       }
       parsedSessions.push({
+        id: account.id,
         platform,
         name: accountName,
         cookie: String(account.cookie || ''),
@@ -328,13 +333,13 @@ export function loadAccountSessions(storeInput: AccountStoreInput = process.cwd(
       }
       keyCounts.set(apiAccessKey, (keyCounts.get(apiAccessKey) || 0) + 1);
     } catch (error) {
-      console.warn(`[accounts] 忽略第 ${index + 1} 个账号：${(error as Error).message}`);
+      log.warn(`[accounts] 忽略第 ${index + 1} 个账号：${(error as Error).message}`);
     }
   });
 
   const sessions = parsedSessions.filter((session) => {
     if ((keyCounts.get(session.apiAccessKey) || 0) > 1) {
-      console.warn(`[accounts] 忽略账号 "${session.name}"：api_access_key 重复`);
+      log.warn(`[accounts] 忽略账号 "${session.name}"：api_access_key 重复`);
       return false;
     }
     return true;
@@ -342,7 +347,7 @@ export function loadAccountSessions(storeInput: AccountStoreInput = process.cwd(
 
   const byAccessKey = new Map<string, MusicAccountSession>();
   sessions.forEach((session) => byAccessKey.set(session.apiAccessKey, session));
-  console.log(`[accounts] 已注册 ${sessions.length} 个账号`);
+  log.info(`[accounts] 已注册 ${sessions.length} 个账号`);
 
   return { sessions, byAccessKey };
 }
@@ -481,6 +486,7 @@ export function createAccountWithCookie(
   store.insert(account);
 
   const session: MusicAccountSession = {
+    id: store.list().find(item => item.api_access_key === token)?.id,
     platform,
     name: normalizedName,
     cookie: normalizedCookie,

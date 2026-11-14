@@ -5,6 +5,7 @@ import type { Server } from 'node:http';
 import { createApp } from './app';
 
 const WelcomePage = require('../core/WelcomePage');
+const log = require('../core/Logger').createConsole({ component: 'server' });
 
 async function start() {
   try {
@@ -51,7 +52,7 @@ async function start() {
       if (shuttingDown) return;
       shuttingDown = true;
       const { red, bright, reset } = WelcomePage.colors;
-      console.log(`\n${red}${bright}🛑 ${signal} received, shutting down gracefully...${reset}`);
+      log.info(`\n${red}${bright}🛑 ${signal} received, shutting down gracefully...${reset}`);
       app.loginRefreshScheduler?.stop();
       app.lxSourceUpdateScheduler?.stop();
 
@@ -61,7 +62,7 @@ async function start() {
         });
       }
       await app.lxSourceManager?.stop();
-      console.log(`${red}👋 Server closed${reset}`);
+      log.info(`${red}👋 Server closed${reset}`);
       process.exit(0);
     };
 
@@ -111,7 +112,7 @@ export async function listenWithOptionalFallback(
     server = await listenOnce(app, preferredPort, host);
   } catch (error) {
     if (!allowFallback || (error as NodeJS.ErrnoException).code !== 'EADDRINUSE') throw error;
-    console.warn(`[server] 端口 ${preferredPort} 已占用，正在选择空闲端口`);
+    log.warn(`[server] 端口 ${preferredPort} 已占用，正在选择空闲端口`);
     server = await listenOnce(app, 0, host);
   }
   const address = server.address() as AddressInfo | null;

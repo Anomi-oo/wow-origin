@@ -1,3 +1,5 @@
+const log = require('../../../core/Logger').createConsole({ component: 'kugou' });
+
 /**
  * @fileoverview 运行时配置工具
  *
@@ -105,7 +107,7 @@ function applyCliOverrides(args) {
     if (!Number.isNaN(port) && port > 0) {
       process.env.PORT = String(port);
     } else {
-      console.warn(`[cli] Invalid port value "${parsed.port}", fallback to default.`);
+      log.warn(`[cli] Invalid port value "${parsed.port}", fallback to default.`);
     }
   }
 }
@@ -149,7 +151,7 @@ function resolveProxy() {
 
     // 仅支持 HTTP/HTTPS 代理协议
     if (!/^https?:$/.test(parsed.protocol)) {
-      console.warn(`[proxy] Unsupported proxy protocol: ${parsed.protocol}`);
+      log.warn(`[proxy] Unsupported proxy protocol: ${parsed.protocol}`);
       cachedProxy = null;
       return null;
     }
@@ -170,9 +172,9 @@ function resolveProxy() {
     }
 
     cachedProxy = proxyConfig;
-    console.info(`[proxy] Using proxy ${parsed.protocol}//${parsed.host}`);
+    log.info(`[proxy] Using proxy ${parsed.protocol}//${parsed.host}`);
   } catch (error) {
-    console.warn(`[proxy] Failed to parse proxy address "${rawProxy}": ${error.message}`);
+    log.warn(`[proxy] Failed to parse proxy address "${rawProxy}": ${error.message}`);
     cachedProxy = null;
   }
 

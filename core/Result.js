@@ -1,3 +1,5 @@
+const log = require('./Logger').createConsole({ component: 'result' });
+
 /**
  * 结果格式化
  *
@@ -26,7 +28,7 @@ class Result {
    * @returns {Object} 标准化错误响应
    */
   static error(error, code = 500) {
-    console.error('Error:', error?.diagnostics
+    log.error('Error:', error?.diagnostics
       ? { message: error.message, ...error.diagnostics }
       : error)
     const result = {

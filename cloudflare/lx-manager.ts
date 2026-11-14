@@ -11,6 +11,8 @@ import { getLxQualityCandidates, mapLxQualityToTrackUrl, selectLxPlatform } from
 import { bundledLxSource, installBundledLxSource } from './generated/lx-source';
 import { diagnosticError, logLxResolution, upstreamResponse } from '../src/lx-resource/diagnostics';
 
+const log = require('../core/Logger').createConsole({ component: 'lx-source' });
+
 const EVENT_NAMES = { request: 'request', inited: 'inited', updateAlert: 'updateAlert' } as const;
 const QUALITIES: LxQuality[] = ['128k', '320k', 'flac', 'flac24bit', 'hires'];
 
@@ -157,8 +159,15 @@ export class CloudflareLxSourceManager implements AppLxSourceManager {
       version: '2.0.0',
       env: 'cloudflare'
     };
-    const sandbox = { lx, console, setTimeout, clearTimeout, URL, URLSearchParams, TextEncoder, TextDecoder, atob, btoa };
-    installBundledLxSource(sandbox, console);
+    const sourceConsole = Object.create(console) as Console;
+    for (const level of ['log', 'info', 'warn', 'error', 'debug'] as const) {
+      sourceConsole[level] = (...args: unknown[]) => {
+        const prefix = `[lx-source:${bundledLxSource.name || '未命名源'}#${bundledLxSource.digest?.slice(0, 6) || ''}]`;
+        log[level](prefix, ...args);
+      };
+    }
+    const sandbox = { lx, console: sourceConsole, setTimeout, clearTimeout, URL, URLSearchParams, TextEncoder, TextDecoder, atob, btoa };
+    installBundledLxSource(sandbox, sourceConsole);
     if (!this.requestHandler) throw new Error('打包的洛雪源没有注册 request 处理器');
   }
 

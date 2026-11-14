@@ -1,5 +1,7 @@
 import type { LxLogLevel } from './types';
 
+const log = require('../../core/Logger').createConsole({ component: 'lx-source' });
+
 export function safeDiagnosticText(value: string): string {
   return value.replace(/https?:\/\/[^\s"'<>]+/g, '[url]')
     .replace(/\b(cookie|authorization|token|secret|password|api[_-]?key|key|MUSIC_U|qm_keyst|musickey)\s*[:=]\s*[^\s,;]+/gi, '$1=[redacted]')
@@ -53,9 +55,5 @@ export function diagnosticError(error: unknown): Record<string, unknown> {
 }
 
 export function logLxResolution(level: LxLogLevel, event: string, context: Record<string, unknown>): void {
-  const output = `[lx-source] ${event} ${JSON.stringify(context)}`;
-  if (level === 'warn') console.warn(output);
-  else if (level === 'error') console.error(output);
-  else if (level === 'debug') console.debug(output);
-  else console.info(output);
+  log[level](`${event} ${JSON.stringify(context)}`);
 }

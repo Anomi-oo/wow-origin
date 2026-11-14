@@ -79,6 +79,7 @@ export function accountValues(account: RawMusicAccount): Array<string | null> {
 
 export function rowToAccount(row: StoredAccountRow): RawMusicAccount {
   return {
+    id: row.id,
     platform: row.platform ?? undefined,
     name: row.name ?? undefined,
     cookie: row.cookie ?? undefined,

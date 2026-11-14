@@ -1,3 +1,5 @@
+const log = require('./Logger').createConsole({ component: 'server' });
+
 /**
  * 现代化启动界面
  * 提供美观整洁的服务器启动信息展示
@@ -28,15 +30,15 @@ class WelcomePage {
     const subtitleLine = this.padLine(`    ${gray}A unified API gateway for multiple music platforms${reset} `)
     const emptyLine = this.padLine('')
 
-    console.log()
-    console.log(`${cyan}${bright}╔══════════════════════════════════════════════════════════╗${reset}`)
-    console.log(`${cyan}${bright}║${reset}${emptyLine}${cyan}${bright}║${reset}`)
-    console.log(`${cyan}${bright}║${reset}${titleLine}${cyan}${bright}║${reset}`)
-    console.log(`${cyan}${bright}║${reset}${emptyLine}${cyan}${bright}║${reset}`)
-    console.log(`${cyan}${bright}║${reset}${subtitleLine}${cyan}${bright}║${reset}`)
-    console.log(`${cyan}${bright}║${reset}${emptyLine}${cyan}${bright}║${reset}`)
-    console.log(`${cyan}${bright}╚══════════════════════════════════════════════════════════╝${reset}`)
-    console.log()
+    log.info()
+    log.info(`${cyan}${bright}╔══════════════════════════════════════════════════════════╗${reset}`)
+    log.info(`${cyan}${bright}║${reset}${emptyLine}${cyan}${bright}║${reset}`)
+    log.info(`${cyan}${bright}║${reset}${titleLine}${cyan}${bright}║${reset}`)
+    log.info(`${cyan}${bright}║${reset}${emptyLine}${cyan}${bright}║${reset}`)
+    log.info(`${cyan}${bright}║${reset}${subtitleLine}${cyan}${bright}║${reset}`)
+    log.info(`${cyan}${bright}║${reset}${emptyLine}${cyan}${bright}║${reset}`)
+    log.info(`${cyan}${bright}╚══════════════════════════════════════════════════════════╝${reset}`)
+    log.info()
   }
 
   /**
@@ -44,8 +46,8 @@ class WelcomePage {
    */
   static showStartupStatus() {
     const { yellow, bright, reset } = this.colors
-    console.log(`${yellow}${bright}⚡ Starting server...${reset}`)
-    console.log()
+    log.info(`${yellow}${bright}⚡ Starting server...${reset}`)
+    log.info()
   }
 
   /**
@@ -55,22 +57,22 @@ class WelcomePage {
     const { green, reset, gray, cyan, yellow } = this.colors
     const statusIcon = '✓'
 
-    console.log(`  ${green}${statusIcon}${reset} Platform: ${cyan}${platformName}${reset}`)
-    console.log(`    ${gray}├─${reset} ModuleNum: ${moduleCount}`)
+    log.info(`  ${green}${statusIcon}${reset} Platform: ${cyan}${platformName}${reset}`)
+    log.info(`    ${gray}├─${reset} ModuleNum: ${moduleCount}`)
 
     // deviceId是52位大写十六进制，显示前8位+后4位的格式
     if (deviceId && deviceId !== 'N/A' && deviceId.length >= 12) {
       const displayId = `${deviceId.substring(0, 8)}...${deviceId.substring(deviceId.length - 4)}`
-      console.log(`    ${gray}├─${reset} Device ID: ${displayId}`)
+      log.info(`    ${gray}├─${reset} Device ID: ${displayId}`)
     } else {
-      console.log(`    ${gray}├─${reset} Status: Ready`)
+      log.info(`    ${gray}├─${reset} Status: Ready`)
     }
 
     // 显示静态IP
     if (staticIP) {
-      console.log(`    ${gray}├─${reset} Static IP: ${staticIP}`)
+      log.info(`    ${gray}├─${reset} Static IP: ${staticIP}`)
     } else {
-      console.log(`    ${gray}├─${reset} IP: Not configured`)
+      log.info(`    ${gray}├─${reset} IP: Not configured`)
     }
 
   }
@@ -81,9 +83,9 @@ class WelcomePage {
   static showReadyStatus(serverInfo) {
     const { green, bright, reset, cyan, white, gray } = this.colors
 
-    console.log()
-    console.log(`${green}${bright}🚀 Server Ready!${reset}`)
-    console.log()
+    log.info()
+    log.info(`${green}${bright}🚀 Server Ready!${reset}`)
+    log.info()
 
     // 构建内容行
     const localUrl = `http://${serverInfo.host || 'localhost'}:${serverInfo.port}`
@@ -96,20 +98,20 @@ class WelcomePage {
     const timeLine = this.padLine(`  ${white}Time:${reset}      ${timeText}`)
 
     // 服务信息框
-    console.log(`${cyan}┌─ Server Information ─────────────────────────────────────┐${reset}`)
-    console.log(`${cyan}│${reset}                                                          ${cyan}│${reset}`)
-    console.log(`${cyan}│${reset}${localLine}${cyan}│${reset}`)
-    console.log(`${cyan}│${reset}${platformLine}${cyan}│${reset}`)
-    console.log(`${cyan}│${reset}${timeLine}${cyan}│${reset}`)
-    console.log(`${cyan}│${reset}                                                          ${cyan}│${reset}`)
-    console.log(`${cyan}└──────────────────────────────────────────────────────────┘${reset}`)
-    console.log()
+    log.info(`${cyan}┌─ Server Information ─────────────────────────────────────┐${reset}`)
+    log.info(`${cyan}│${reset}                                                          ${cyan}│${reset}`)
+    log.info(`${cyan}│${reset}${localLine}${cyan}│${reset}`)
+    log.info(`${cyan}│${reset}${platformLine}${cyan}│${reset}`)
+    log.info(`${cyan}│${reset}${timeLine}${cyan}│${reset}`)
+    log.info(`${cyan}│${reset}                                                          ${cyan}│${reset}`)
+    log.info(`${cyan}└──────────────────────────────────────────────────────────┘${reset}`)
+    log.info()
 
     // 快速指南
-    console.log(`${gray}💡 Quick Start:${reset}`)
-    console.log(`${gray}   GET  /${reset} → API documentation`)
-    console.log(`${gray}   GET  ${this.randomTips()} ${reset} → Start!`)
-    console.log()
+    log.info(`${gray}💡 Quick Start:${reset}`)
+    log.info(`${gray}   GET  /${reset} → API documentation`)
+    log.info(`${gray}   GET  ${this.randomTips()} ${reset} → Start!`)
+    log.info()
   }
 
 
@@ -139,16 +141,16 @@ class WelcomePage {
   static showError(message, error = null) {
     const { red, bright, reset, gray } = this.colors
 
-    console.log()
-    console.log(`${red}${bright}❌ Startup Failed${reset}`)
-    console.log(`${red}│${reset} ${message}`)
+    log.info()
+    log.info(`${red}${bright}❌ Startup Failed${reset}`)
+    log.info(`${red}│${reset} ${message}`)
 
     if (error) {
-      console.log(`${red}│${reset}`)
-      console.log(`${red}└─${reset} ${gray}${error.message}${reset}`)
+      log.info(`${red}│${reset}`)
+      log.info(`${red}└─${reset} ${gray}${error.message}${reset}`)
     }
 
-    console.log()
+    log.info()
   }
 
   /**

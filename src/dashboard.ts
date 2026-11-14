@@ -1,3 +1,5 @@
+const log = require('../core/Logger').createConsole({ component: 'accounts' });
+
 import { kugouEdition } from './kugouState';
 import os from 'node:os';
 import { createHash, timingSafeEqual } from 'node:crypto';
@@ -122,10 +124,10 @@ export function createDashboardRouter(options: {
             body: {}, ip: 'account-delete', connection: { remoteAddress: 'account-delete' }
           });
           if (result?.code !== 200 || Number(result.body?.code) !== 200) {
-            console.warn(`[accounts] ${name}退出登录失败，继续删除账号`, { code: result?.code, diagnostics: result?.diagnostics });
+            log.warn(`[accounts] ${name}退出登录失败，继续删除账号`, { code: result?.code, diagnostics: result?.diagnostics });
           }
         } catch (error) {
-          console.warn(`[accounts] ${name}退出登录请求异常，继续删除账号`, {
+          log.warn(`[accounts] ${name}退出登录请求异常，继续删除账号`, {
             name: (error as Error)?.name, code: (error as { code?: string })?.code
           });
         }

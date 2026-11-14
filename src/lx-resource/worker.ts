@@ -5,6 +5,7 @@ import zlib from 'node:zlib';
 import { parentPort, workerData } from 'node:worker_threads';
 import axios, { type AxiosRequestConfig } from 'axios';
 import { diagnosticError, safeDiagnosticText, upstreamResponse } from './diagnostics';
+import { getRequestContext, runWithRequestContext } from '../../core/RequestContext';
 import type {
   LxLogLevel,
   LxScriptInfo,
@@ -75,7 +76,7 @@ function emitLog(level: LxLogLevel, args: unknown[]): void {
   const context = invocationContext.getStore();
   const prefix = context ? `[request=${context.requestId} platform=${context.invocation.source} id=${context.invocation.musicInfo.id} quality=${context.invocation.quality}] ` : '';
   const message = prefix + args.map(safeLogValue).map(safeDiagnosticText).join(' ').slice(0, 4096);
-  port.postMessage({ type: 'log', level, message });
+  port.postMessage({ type: 'log', level, message, context: getRequestContext() });
 }
 
 function sourceConsole() {
@@ -335,7 +336,7 @@ port.on('message', (message: ParentMessage) => {
   const reportError = (error: unknown): void => {
     port.postMessage({ type: 'result', requestId: message.requestId, error: { ...diagnosticError(error), upstream: context.upstream } });
   };
-  invocationContext.run(context, () => {
+  runWithRequestContext(message.invocation.context, () => invocationContext.run(context, () => {
     try {
       const result = requestHandler!({
         source: message.invocation.source,
@@ -356,7 +357,7 @@ port.on('message', (message: ParentMessage) => {
     } catch (error) {
       reportError(error);
     }
-  });
+  }));
 });
 
 try {

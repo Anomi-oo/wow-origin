@@ -26,6 +26,7 @@ import type {
 } from './types';
 
 const MAX_SOURCE_BYTES = 5 * 1024 * 1024;
+const log = require('../../core/Logger').createConsole({ component: 'lx-source' });
 const DOWNLOAD_TIMEOUT_MS = 15_000;
 const INITIALIZATION_TIMEOUT_MS = 10_000;
 const SOURCE_REQUEST_TIMEOUT_MS = 5_000;
@@ -88,7 +89,7 @@ export class LxSourceManager implements LxTrackUrlResolver, LxSourceLifecycle {
     this.initialLoad = Promise.all(this.configs.map((config) => (
       this.runExclusive(config, () => this.loadAtStartup(config))
     ))).then(() => undefined).catch((error) => {
-      console.warn('[lx-source] initial background load failed', safeErrorMessage(error));
+      log.warn('initial background load failed', safeErrorMessage(error));
     });
   }
 
@@ -363,10 +364,6 @@ export class LxSourceManager implements LxTrackUrlResolver, LxSourceLifecycle {
 
   private log(level: LxLogLevel, name: string, hash: string, message: string): void {
     const prefix = `[lx-source:${sourceLabel(name, hash)}]`;
-    const output = `${prefix} ${message}`;
-    if (level === 'error') console.error(output);
-    else if (level === 'warn') console.warn(output);
-    else if (level === 'debug') console.debug(output);
-    else console.info(output);
+    log[level](`${prefix} ${message}`);
   }
 }

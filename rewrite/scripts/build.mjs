@@ -42,6 +42,9 @@ function resolveAliasPlugin() {
         if (/core\/PlatformCache$/.test(args.path)) {
           return { path: path.join(rewriteDirectory, 'shims', 'cache.ts') };
         }
+        if (/(?:^|\/)RequestContext$/.test(args.path)) {
+          return { path: path.join(rewriteDirectory, 'shims', 'request-context.ts') };
+        }
         return undefined;
       });
     }

@@ -5,6 +5,8 @@ import { initializeRewritePlatforms } from './platform';
 import { dispatchWowRoute } from './routes';
 import { continueRequest, finish, json, runtimeRequest, type RuntimeRequest, type RuntimeResponse } from './runtime';
 
+const log = require('../core/Logger').createConsole({ component: 'rewrite' });
+
 declare const __REWRITE_HOST__: string;
 declare const __REWRITE_UI_URL__: string;
 
@@ -121,7 +123,7 @@ async function main(): Promise<void> {
     initializeRewritePlatforms();
     finish(await dispatch(request));
   } catch (error) {
-    console.log(`[wow-origin] fatal: ${(error as Error)?.stack || error}`);
+    log.error('fatal', error);
     finish(json(500, { code: 500, message: (error as Error)?.message || 'Internal server error', data: null }));
   }
 }

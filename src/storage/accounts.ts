@@ -1,3 +1,5 @@
+const log = require('../../core/Logger').createConsole({ component: 'accounts' });
+
 import fs from 'node:fs';
 import path from 'node:path';
 import type { DatabaseSync, StatementSync } from 'node:sqlite';
@@ -135,7 +137,7 @@ export class SqliteAccountStore implements AccountStore {
     try {
       accounts = JSON.parse(content);
     } catch (error) {
-      console.error(`[accounts] JSON 迁移失败: ${legacyPath}`, error);
+      log.error(`[accounts] JSON 迁移失败: ${legacyPath}`, error);
       throw new Error(`旧账号文件迁移失败: ${legacyPath}`, { cause: error });
     }
     if (!Array.isArray(accounts)) {
@@ -150,7 +152,7 @@ export class SqliteAccountStore implements AccountStore {
         }
       });
       this.database.exec('COMMIT');
-      console.log(`[accounts] 已将 ${accounts.length} 条旧账号配置迁移到 SQLite`);
+      log.info(`[accounts] 已将 ${accounts.length} 条旧账号配置迁移到 SQLite`);
     } catch (error) {
       this.database.exec('ROLLBACK');
       throw error;

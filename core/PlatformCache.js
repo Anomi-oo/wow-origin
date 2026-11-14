@@ -1,3 +1,5 @@
+const log = require('./Logger').createConsole({ component: 'cache' });
+
 /**
  * 高性能LRU缓存实现
  * 优化: 使用双向链表维护LRU顺序,避免Map的delete+set开销
@@ -225,7 +227,7 @@ class PlatformCache {
     this._cleanupTimer = setInterval(() => {
       const cleaned = this.cleanup()
       if (cleaned > 0) {
-        console.log(`[Cache] Auto cleanup: removed ${cleaned} expired items`)
+        log.info(`[Cache] Auto cleanup: removed ${cleaned} expired items`)
       }
     }, intervalMs)
 

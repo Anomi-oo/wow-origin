@@ -1,8 +1,15 @@
+const log = require('../core/Logger').createConsole({ component: 'onload' });
+
 import { createAdapter } from './adapter';
 import type { AccountSessionRegistry, MusicAccountSession } from './accounts';
 import type { LxSourceLifecycle } from './lx-resource';
+import { runWithAccountContext } from '../core/RequestContext';
 
 export async function preloadSessionFavorites(session: MusicAccountSession): Promise<void> {
+  return runWithAccountContext(session, () => loadSessionFavorites(session));
+}
+
+async function loadSessionFavorites(session: MusicAccountSession): Promise<void> {
   if (!session.cookie.trim()) return;
   const client = createAdapter(session);
 
@@ -16,9 +23,9 @@ export async function preloadSessionFavorites(session: MusicAccountSession): Pro
       const items = await load();
       if (!session.cookie) return;
       markLoaded();
-      console.log(`[onload] preloaded ${items.length} ${session.platform} favorite ${label} for ${session.name}`);
+      log.info(`[onload] preloaded ${items.length} ${session.platform} favorite ${label} for ${session.name}`);
     } catch (error) {
-      console.warn(`[onload] failed to preload ${session.platform} favorite ${label} for ${session.name}: ${(error as Error).message}`);
+      log.warn(`[onload] failed to preload ${session.platform} favorite ${label} for ${session.name}: ${(error as Error).message}`);
     }
   }
 }

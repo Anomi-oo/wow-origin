@@ -1,3 +1,10 @@
+// 业务测试验证日志内容；级别、时间和上下文格式由 Logger 单元测试覆盖。
+jest.mock('../../../core/Logger', () => {
+  const Logger = jest.requireActual('../../../core/Logger')
+  Logger.createConsole = () => console
+  return Logger
+})
+
 const express = require('express')
 const request = require('supertest')
 const { createDashboardRouter } = require('../../../dist/dashboard')

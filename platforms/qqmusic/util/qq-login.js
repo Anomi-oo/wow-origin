@@ -1,3 +1,5 @@
+const log = require('../../../core/Logger').createConsole({ component: 'qq-login' });
+
 'use strict';
 
 // Protocol reference: https://l-1124.github.io/QQMusicApi/reference/modules/login/
@@ -275,7 +277,7 @@ async function pollLogin(token) {
     cancelLogin(token);
     // A raw exception can contain the redirect URL or login credentials. Log only
     // the stage and stack frames so Workers Events can locate the failing call.
-    console.error('[qq-login] QR login failed', {
+    log.error('[qq-login] QR login failed', {
       stage: session.stage || 'unknown',
       name: error?.name || 'Error',
       code: error?.diagnostics?.code,

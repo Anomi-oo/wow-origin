@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { Worker } from 'node:worker_threads';
+import { getRequestContext, runWithRequestContext } from '../../core/RequestContext';
 import {
   LX_QUALITIES,
   type LxLogLevel,
@@ -175,6 +176,7 @@ export class LxSourceRuntime {
         type: 'invoke',
         requestId,
         invocation: {
+          context: getRequestContext(),
           source: invocation.source,
           quality: invocation.quality,
           musicInfo: invocation.musicInfo
@@ -222,7 +224,7 @@ export class LxSourceRuntime {
 
   private handleMessage(message: any): void {
     if (message?.type === 'log') {
-      this.onLog?.(message.level, String(message.message ?? ''));
+      runWithRequestContext(message.context, () => this.onLog?.(message.level, String(message.message ?? '')));
       return;
     }
     if (message?.type !== 'result' || typeof message.requestId !== 'string') return;

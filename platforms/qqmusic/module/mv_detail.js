@@ -1,3 +1,5 @@
+const log = require('../../../core/Logger').createConsole({ component: 'qq' });
+
 // QQ音乐 MV 详情接口
 
 const { default: axios } = require('axios')
@@ -52,7 +54,7 @@ module.exports = async (query, request) => {
       }
     }),
     mvUrlModule({ id: query.mvid, r: 240, uin: uin, qm_keyst: qm_keyst }, request).catch(error => {
-      console.log('Failed to get brs from mv_url:', error.message)
+      log.info('Failed to get brs from mv_url:', error.message)
       return { brs: [] }
     })
   ])

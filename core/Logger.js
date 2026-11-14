@@ -8,8 +8,30 @@
  */
 
 const { globalLogBuffer } = require('./AsyncLogBuffer')
+const { getRequestContext, formatRequestContextPrefix } = require('./RequestContext')
 
 class Logger {
+  /** 兼容多参数输出，所有运行时日志仍经过同一套级别、时间和上下文格式化。 */
+  static createConsole(context = {}) {
+    const logger = new Logger(context)
+    const write = (level, args) => {
+      if (!logger.shouldLog(level)) return
+      const message = args.map(value => {
+        if (value instanceof Error) value = logger.serializeError(value)
+        if (value && typeof value === 'object') return logger.formatCompactJSON(logger.maskSensitiveData(value))
+        return value === undefined ? '' : String(value)
+      }).join(' ')
+      logger.compact(level === 'warn' ? 'warning' : level, message, level)
+    }
+    return {
+      log: (...args) => write('info', args),
+      info: (...args) => write('info', args),
+      warn: (...args) => write('warn', args),
+      error: (...args) => write('error', args),
+      debug: (...args) => write('debug', args)
+    }
+  }
+
   constructor(context = {}) {
     this.context = context
     this.logLevel = process.env.LOG_LEVEL || 'info'
@@ -104,18 +126,11 @@ class Logger {
   request(route, time, options = {}) {
     if (!this.shouldLog('info')) return
 
-    const timestamp = this.getShortTime()
+    const timestamp = formatRequestContextPrefix() + this.getShortTime()
     const { platform, cached, error, params, ip } = options
 
     // 构建上下文标签 [platform/component]
-    const contextParts = []
-    if (platform) contextParts.push(platform)
-    if (this.context.platform && !platform) contextParts.push(this.context.platform)
-    if (this.context.component) contextParts.push(this.context.component)
-
-    const contextTag = contextParts.length > 0
-      ? ` ${this.colors.dim}[${this.colors.cyan}${contextParts.join('/')}${this.colors.dim}]${this.colors.reset}`
-      : ''
+    const contextTag = this.formatContextTag(platform)
 
     // IP标签（如果提供）
     const ipTag = ip
@@ -157,7 +172,7 @@ class Logger {
   compact(icon, message, level = 'info') {
     if (!this.shouldLog(level)) return
 
-    const timestamp = this.getShortTime()
+    const timestamp = formatRequestContextPrefix() + this.getShortTime()
     const emoji = this.icons[icon] || icon
     const color = this.getLevelColor(level)
 
@@ -175,8 +190,7 @@ class Logger {
    */
   detail(level, message, data = {}) {
     if (!this.shouldLog(level)) return
-
-    const timestamp = this.getShortTime()
+    const timestamp = formatRequestContextPrefix() + this.getShortTime()
     const color = this.getLevelColor(level)
     const icon = this.getLevelIcon(level)
 
@@ -195,9 +209,11 @@ class Logger {
    * 格式化上下文标签
    * @returns {string} 格式化的上下文标签
    */
-  formatContextTag() {
+  formatContextTag(platform) {
+    const requestContext = getRequestContext()
     const contextParts = []
-    if (this.context.platform) contextParts.push(this.context.platform)
+    const resolvedPlatform = platform || requestContext?.platform || this.context.platform
+    if (resolvedPlatform) contextParts.push(resolvedPlatform)
     if (this.context.component) contextParts.push(this.context.component)
 
     return contextParts.length > 0

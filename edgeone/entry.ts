@@ -1,3 +1,5 @@
+const log = require('../core/Logger').createConsole({ component: 'edgeone' });
+
 import '../src/nodeHttpClient';
 import express, { type Express } from 'express';
 import { platformModules } from '../cloudflare/generated/platform-modules.js';
@@ -83,7 +85,7 @@ app.use((req, res, next) => {
 });
 
 app.use((error: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error('[edgeone] 初始化请求处理失败', error);
+  log.error('[edgeone] 初始化请求处理失败', error);
   if (res.headersSent) return;
   res.status(500).json({ code: 500, message: '服务初始化失败', data: null });
 });

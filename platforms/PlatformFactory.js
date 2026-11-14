@@ -1,3 +1,5 @@
+const log = require('../core/Logger').createConsole({ component: 'platform' });
+
 /**
  * 平台工厂类
  * 管理所有音乐平台适配器的注册、创建和调用
@@ -22,10 +24,10 @@ class PlatformFactory {
       // 注册会替换平台实例，新实例还没有加载模块，必须允许重新初始化。
       this.initialized = false
 
-      console.log(`Platform ${name} registered successfully`)
+      log.info(`Platform ${name} registered successfully`)
       return true
     } catch (error) {
-      console.error(`Failed to register platform ${name}:`, error.message)
+      log.error(`Failed to register platform ${name}:`, error.message)
       return false
     }
   }
@@ -42,7 +44,7 @@ class PlatformFactory {
     for (const [name, platform] of this.platforms) {
       initPromises.push(
         platform.initialize().catch(error => {
-          console.error(`Failed to initialize platform ${name}:`, error.message)
+          log.error(`Failed to initialize platform ${name}:`, error.message)
           return { name, error }
         })
       )
@@ -52,7 +54,7 @@ class PlatformFactory {
     const failed = results.filter(r => r.status === 'rejected' || r.value?.error)
 
     if (failed.length > 0) {
-      console.warn(`${failed.length} platforms failed to initialize`)
+      log.warn(`${failed.length} platforms failed to initialize`)
     }
 
     this.initialized = true

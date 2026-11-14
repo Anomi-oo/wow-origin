@@ -1,5 +1,6 @@
 import type { TrackUrl } from 'aduoer-wow-sdk';
 import type { MusicPlatform } from '../types';
+import type { RequestContext } from '../../core/RequestContext';
 
 export const LX_SOURCE_ENV_KEYS = [
   'LX_SOURCE_URL',
@@ -53,6 +54,7 @@ export interface LxWorkerInitialization {
 }
 
 export interface LxWorkerInvocation {
+  context?: RequestContext;
   source: LxPlatform;
   quality: LxQuality;
   musicInfo: Record<string, unknown>;

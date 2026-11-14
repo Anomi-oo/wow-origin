@@ -10,6 +10,8 @@ import { collectionStatusNeeded } from '../src/collectionStatus';
 import { proxyAccounts, type ProxyAccount } from './account-store';
 import { authorizationToken, json, type RuntimeRequest, type RuntimeResponse } from './runtime';
 
+const log = require('../core/Logger').createConsole({ component: 'rewrite' });
+
 function clientFor(account: ProxyAccount): QQClient | NeteaseClient {
   const tracks = new Set(account.favoriteTrackIds);
   const playlists = new Set(account.userPlaylistIds || []);
@@ -39,9 +41,7 @@ function errorResponse(error: any): RuntimeResponse {
   const message = status >= 500 && !error?.status
     ? 'Internal server error'
     : error?.message || 'Internal server error';
-  const errorMessage = error instanceof Error ? error.message : String(error);
-  const stack = error instanceof Error ? error.stack : undefined;
-  console.log(`[wow-origin] ${status}: ${errorMessage}${stack ? `\n${stack}` : ''}`);
+  log.error(`request failed (${status})`, error);
   return json(status, { code, message, data: null });
 }
 
@@ -89,7 +89,7 @@ export async function dispatchWowRoute(
         await adapter.userArtists();
         initialized.favoriteArtistIds = [...((adapter as any).favoriteArtistSet as Set<string>)];
       } catch {
-        console.warn('[wow-origin] failed to load favorite artists');
+        log.warn('failed to load favorite artists');
       }
     }
     if (needed.albums && account.favoriteAlbumIds === null) {
@@ -97,7 +97,7 @@ export async function dispatchWowRoute(
         await adapter.userAlbums();
         initialized.favoriteAlbumIds = [...((adapter as any).favoriteAlbumSet as Set<string>)];
       } catch {
-        console.warn('[wow-origin] failed to load favorite albums');
+        log.warn('failed to load favorite albums');
       }
     }
     if (Object.keys(initialized).length) proxyAccounts.update(account.apiAccessKey, initialized);

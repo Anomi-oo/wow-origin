@@ -1,3 +1,5 @@
+const log = require('../../core/Logger').createConsole({ component: 'lx-source' });
+
 import type { LxSourceLifecycle } from './types';
 
 export interface LxSourceUpdateScheduler {
@@ -24,7 +26,7 @@ export function createLxSourceUpdateScheduler(
       try {
         await lifecycle.updateAll();
       } catch (error) {
-        console.error('[lx-source] scheduled update failed', error);
+        log.error('[lx-source] scheduled update failed', error);
       } finally {
         schedule();
       }

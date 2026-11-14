@@ -1,3 +1,5 @@
+const log = require('../../../core/Logger').createConsole({ component: 'qq' });
+
 const { default: axios } = require('axios')
 
 const PRIMARY_SEARCH_URL = 'http://u6.y.qq.com/cgi-bin/musicu.fcg'
@@ -24,7 +26,7 @@ module.exports = async query => {
   try {
     return await searchPrimary(query.keywords, mappedType, offset, limit, pageNum)
   } catch (error) {
-    console.warn(
+    log.warn(
       `[qqmusic-search] primary search failed, using legacy CGI: ${safeErrorMessage(error)}`
     )
     return searchLegacy(query.keywords, mappedType, offset, limit, pageNum)

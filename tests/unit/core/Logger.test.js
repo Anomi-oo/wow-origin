@@ -4,6 +4,7 @@
  */
 const Logger = require('../../../core/Logger')
 const { globalLogBuffer } = require('../../../core/AsyncLogBuffer')
+const { runWithRequestContext } = require('../../../core/RequestContext')
 
 // Mock console.log 避免测试时输出
 let consoleOutput = []
@@ -36,6 +37,40 @@ beforeEach(() => {
 
 describe('Logger', () => {
   let logger
+
+  test('统一接口的所有级别均带时间和账号前缀', () => {
+    const previous = process.env.LOG_LEVEL
+    process.env.LOG_LEVEL = 'debug'
+    try {
+      const log = Logger.createConsole({ component: 'test' })
+      runWithRequestContext({ accountName: '测试账号', accountId: 12 }, () => {
+        for (const level of ['info', 'warn', 'error', 'debug']) log[level](`message-${level}`)
+      })
+      expect(consoleOutput).toHaveLength(4)
+      for (const line of consoleOutput) {
+        expect(line.replace(/\x1b\[[0-9;]*m/g, '')).toMatch(/^\[account="测试账号\[12\]"\] \d{2}:\d{2}:\d{2} /)
+      }
+    } finally {
+      process.env.LOG_LEVEL = previous
+    }
+  })
+
+  test('统一接口保留异常信息、过滤级别并脱敏结构化参数', () => {
+    const previous = process.env.LOG_LEVEL
+    process.env.LOG_LEVEL = 'warn'
+    try {
+      const log = Logger.createConsole()
+      log.info('hidden-info')
+      log.debug('hidden-debug')
+      log.warn('visible-warning')
+      log.error('visible-error', new Error('upstream unavailable'), { cookie: 'private-cookie-value' })
+      expect(consoleOutput).toHaveLength(2)
+      expect(consoleOutput.join('\n')).toContain('upstream unavailable')
+      expect(consoleOutput.join('\n')).not.toContain('private-cookie-value')
+    } finally {
+      process.env.LOG_LEVEL = previous
+    }
+  })
 
   beforeEach(() => {
     logger = new Logger({ platform: 'test', component: 'unit-test' })
