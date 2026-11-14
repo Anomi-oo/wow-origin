@@ -24,6 +24,7 @@ type PendingInvocation = {
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
   timer: NodeJS.Timeout;
+  onDiagnostics?: (upstream: Record<string, unknown>[]) => void;
 };
 
 function normalizeCapability(value: unknown): LxPlatformCapability | undefined {
@@ -158,7 +159,7 @@ export class LxSourceRuntime {
     return this.initialization;
   }
 
-  invoke(invocation: LxWorkerInvocation): Promise<unknown> {
+  invoke(invocation: LxWorkerInvocation, onDiagnostics?: PendingInvocation['onDiagnostics']): Promise<unknown> {
     if (this.stopped) return Promise.reject(new Error('LX source worker is unavailable'));
     const requestId = randomUUID();
     return new Promise((resolve, reject) => {
@@ -169,7 +170,7 @@ export class LxSourceRuntime {
       }, invocation.timeoutMs);
       timer.unref?.();
 
-      this.pending.set(requestId, { resolve, reject, timer });
+      this.pending.set(requestId, { resolve, reject, timer, onDiagnostics });
       this.worker.postMessage({
         type: 'invoke',
         requestId,
@@ -229,8 +230,10 @@ export class LxSourceRuntime {
     if (!pending) return;
     this.pending.delete(message.requestId);
     clearTimeout(pending.timer);
+    if (Array.isArray(message.upstream)) pending.onDiagnostics?.(message.upstream);
     if (message.error) {
-      pending.reject(new Error(String(message.error)));
+      const diagnostics = typeof message.error === 'object' ? message.error : { message: String(message.error) };
+      pending.reject(Object.assign(new Error(diagnostics.message || 'LX source request failed'), diagnostics));
     } else {
       pending.resolve(message.value);
     }

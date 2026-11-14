@@ -16,6 +16,7 @@ import {
 } from './config';
 import { LxSourceRuntime } from './runtime';
 import { getExactLxQuality } from './quality';
+import { diagnosticError, logLxResolution } from './diagnostics';
 import type {
   LxLogLevel,
   LxSourceCapabilities,
@@ -61,12 +62,7 @@ function validateAudioUrl(value: unknown): string {
 }
 
 function safeErrorMessage(error: unknown): string {
-  if (axios.isAxiosError(error)) {
-    const status = error.response?.status;
-    return status ? `${error.code || 'HTTP_ERROR'} (${status})` : (error.code || 'network error');
-  }
-  const message = error instanceof Error ? error.message : String(error);
-  return message.replace(/https?:\/\/[^\s]+/g, '[url]').slice(0, 1024);
+  return JSON.stringify(diagnosticError(error));
 }
 
 export class LxSourceManager implements LxTrackUrlResolver, LxSourceLifecycle {
@@ -135,28 +131,48 @@ export class LxSourceManager implements LxTrackUrlResolver, LxSourceLifecycle {
     accountSources: readonly string[] = [],
     options: { allowFallback?: boolean } = {}
   ): Promise<TrackUrl | undefined> {
-    if (this.stopped || this.sources.size === 0) return undefined;
+    const context = { platform, id, quality };
+    if (this.stopped) {
+      logLxResolution('info', '跳过洛雪解析', { ...context, reason: '管理器已停止' });
+      return undefined;
+    }
     const deadline = Date.now() + SOURCE_CHAIN_TIMEOUT_MS;
     const selectedConfigs = new Map<string, LxSourceConfig>();
     createLxSourceConfigs(accountSources).forEach((config) => selectedConfigs.set(config.hash, config));
     this.globalConfigs.forEach((config) => selectedConfigs.set(config.hash, config));
+    if (!selectedConfigs.size) logLxResolution('info', '跳过洛雪解析', { ...context, reason: '没有配置洛雪源' });
 
     for (const config of selectedConfigs.values()) {
       const remaining = deadline - Date.now();
-      if (remaining <= 0) break;
+      if (remaining <= 0) {
+        logLxResolution('warn', '洛雪源链超时', context);
+        break;
+      }
       const source = this.sources.get(config.hash);
-      if (!source) continue;
+      const sourceContext = { ...context, source: source?.name || sourceLabel('', config.hash), sourceId: config.hash, scope: accountSources.includes(config.url) ? 'account' : 'global' };
+      if (!source) {
+        logLxResolution('info', '跳过洛雪源', { ...sourceContext, reason: '源尚未加载或注册失败' });
+        continue;
+      }
       const lxPlatform = selectLxPlatform(platform, source.capabilities);
-      if (!lxPlatform) continue;
+      if (!lxPlatform) {
+        logLxResolution('info', '跳过洛雪源', { ...sourceContext, reason: '源不支持该平台' });
+        continue;
+      }
       const capability = source.capabilities[lxPlatform];
       if (!capability) continue;
       const exactQuality = getExactLxQuality(platform, quality, capability.qualities);
       const candidates = options.allowFallback === false
         ? (exactQuality ? [exactQuality] : [])
         : getLxQualityCandidates(quality, capability.qualities, platform);
+      if (!candidates.length) logLxResolution('info', '跳过洛雪源', { ...sourceContext, lxPlatform, reason: '源不支持该音质', supportedQualities: capability.qualities });
       for (const lxQuality of candidates) {
         const candidateRemaining = deadline - Date.now();
         if (candidateRemaining <= 0) break;
+        const attempt = { ...sourceContext, lxPlatform, lxQuality };
+        const startedAt = Date.now();
+        let upstream: Record<string, unknown>[] = [];
+        logLxResolution('info', '开始获取音频', attempt);
         try {
           const result = await source.runtime.invoke({
             source: lxPlatform,
@@ -170,13 +186,18 @@ export class LxSourceManager implements LxTrackUrlResolver, LxSourceLifecycle {
               source: lxPlatform,
               types: capability.qualities.map((type) => ({ type, size: null }))
             }
-          });
-          return mapLxQualityToTrackUrl(validateAudioUrl(result), lxQuality, platform);
+          }, (responses) => { upstream = responses; });
+          const trackUrl = mapLxQualityToTrackUrl(validateAudioUrl(result), lxQuality, platform);
+          logLxResolution('info', '获取音频成功', { ...attempt, durationMs: Date.now() - startedAt });
+          return trackUrl;
         } catch (error) {
-          this.log('warn', source.name, config.hash, `获取音频失败: ${safeErrorMessage(error)}`);
+          const diagnostics = diagnosticError(error);
+          if (upstream.length) diagnostics.upstream = upstream;
+          logLxResolution('warn', '获取音频失败，继续尝试', { ...attempt, durationMs: Date.now() - startedAt, error: diagnostics });
         }
       }
     }
+    logLxResolution('info', '洛雪源链未获取到音频', context);
     return undefined;
   }
 

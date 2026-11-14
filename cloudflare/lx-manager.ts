@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import zlib from 'node:zlib';
 import { Buffer } from 'node:buffer';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type { TrackUrl } from 'aduoer-wow-sdk';
 import type { AppLxSourceManager } from '../src/app';
 import type { MusicPlatform } from '../src/types';
@@ -8,12 +9,21 @@ import type { LxPlatform, LxQuality } from '../src/lx-resource/types';
 import { getExactLxQuality } from '../src/lx-resource/quality';
 import { getLxQualityCandidates, mapLxQualityToTrackUrl, selectLxPlatform } from '../src/lx-resource/config';
 import { bundledLxSource, installBundledLxSource } from './generated/lx-source';
+import { diagnosticError, logLxResolution, upstreamResponse } from '../src/lx-resource/diagnostics';
 
 const EVENT_NAMES = { request: 'request', inited: 'inited', updateAlert: 'updateAlert' } as const;
 const QUALITIES: LxQuality[] = ['128k', '320k', 'flac', 'flac24bit', 'hires'];
 
 type SourceCapability = { actions: string[]; qualities: LxQuality[] };
 type RequestHandler = (input: Record<string, unknown>) => unknown;
+const requestContext = new AsyncLocalStorage<Record<string, unknown>[]>();
+
+function recordUpstream(summary: Record<string, unknown>): void {
+  const responses = requestContext.getStore();
+  if (!responses) return;
+  responses.push(summary);
+  if (responses.length > 5) responses.shift();
+}
 
 function selectQuality(requested: string | undefined, supported: readonly LxQuality[]): LxQuality | undefined {
   if (requested === 'max') return [...QUALITIES].reverse().find((item) => supported.includes(item));
@@ -72,6 +82,7 @@ function request(
     const raw = Buffer.from(await response.arrayBuffer());
     if (raw.byteLength > 20 * 1024 * 1024) throw new Error('洛雪源请求响应超过 20 MiB');
     const parsed = parseBody(raw);
+    recordUpstream(upstreamResponse(response.status, parsed));
     callback(null, {
       statusCode: response.status,
       statusMessage: response.statusText,
@@ -80,7 +91,10 @@ function request(
       raw,
       body: parsed
     }, parsed);
-  }).catch((error) => callback(error, null, null)).finally(() => clearTimeout(timer));
+  }).catch((error) => {
+    recordUpstream(diagnosticError(error));
+    callback(error, null, null);
+  }).finally(() => clearTimeout(timer));
   return () => controller.abort();
 }
 
@@ -154,15 +168,29 @@ export class CloudflareLxSourceManager implements AppLxSourceManager {
   async stop(): Promise<void> {}
 
   async resolveTrackUrl(platform: MusicPlatform, id: string, requestedQuality?: string, _accountSources: readonly string[] = [], options: { allowFallback?: boolean } = {}): Promise<TrackUrl | undefined> {
-    if (!this.requestHandler) return undefined;
+    const context = { platform, id, quality: requestedQuality, source: bundledLxSource.name || '未命名源', sourceId: bundledLxSource.digest, scope: 'bundled' };
+    if (!this.requestHandler) {
+      logLxResolution('info', '跳过洛雪解析', { ...context, reason: '没有已加载的洛雪源' });
+      return undefined;
+    }
     const source = selectLxPlatform(platform, this.capabilities);
-    if (!source) return undefined;
+    if (!source) {
+      logLxResolution('info', '跳过洛雪源', { ...context, reason: '源不支持该平台' });
+      return undefined;
+    }
     const supported = this.capabilities[source]?.qualities || [];
     const quality = options.allowFallback === false
       ? getExactLxQuality(platform, requestedQuality, supported)
       : platform === 'kugou' ? getLxQualityCandidates(requestedQuality, supported, platform)[0] : selectQuality(requestedQuality, supported);
-    if (!quality) return undefined;
-    const invocation = Promise.resolve(this.requestHandler({
+    if (!quality) {
+      logLxResolution('info', '跳过洛雪源', { ...context, lxPlatform: source, reason: '源不支持该音质', supportedQualities: supported });
+      return undefined;
+    }
+    const attempt = { ...context, lxPlatform: source, lxQuality: quality };
+    const startedAt = Date.now();
+    const upstream: Record<string, unknown>[] = [];
+    logLxResolution('info', '开始获取音频', attempt);
+    const invocation = requestContext.run(upstream, () => Promise.resolve().then(() => this.requestHandler!({
       source,
       action: 'musicUrl',
       info: {
@@ -176,7 +204,7 @@ export class CloudflareLxSourceManager implements AppLxSourceManager {
           types: this.capabilities[source]!.qualities.map((type) => ({ type, size: null }))
         }
       }
-    }));
+    })));
     let timeout: ReturnType<typeof setTimeout> | undefined;
     let result: unknown;
     try {
@@ -186,10 +214,16 @@ export class CloudflareLxSourceManager implements AppLxSourceManager {
           timeout = setTimeout(() => reject(new Error('洛雪源请求超时')), 15_000);
         })
       ]);
+      if (typeof result !== 'string' || !result) throw new Error('洛雪源未返回音频地址');
+      const resolved = trackUrl(result, quality, platform);
+      logLxResolution('info', '获取音频成功', { ...attempt, durationMs: Date.now() - startedAt });
+      return resolved;
+    } catch (error) {
+      logLxResolution('warn', '获取音频失败', { ...attempt, durationMs: Date.now() - startedAt, error: diagnosticError(error), upstream });
+      throw error;
     } finally {
       if (timeout) clearTimeout(timeout);
     }
-    return typeof result === 'string' && result ? trackUrl(result, quality, platform) : undefined;
   }
 }
 

@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import zlib from 'node:zlib';
 import { parentPort, workerData } from 'node:worker_threads';
 import axios, { type AxiosRequestConfig } from 'axios';
+import { diagnosticError, safeDiagnosticText, upstreamResponse } from './diagnostics';
 import type {
   LxLogLevel,
   LxScriptInfo,
@@ -42,7 +43,8 @@ const EVENT_NAMES = {
   updateAlert: 'updateAlert'
 } as const;
 const SUPPORTED_EVENTS = new Set(Object.values(EVENT_NAMES));
-const invocationContext = new AsyncLocalStorage<string>();
+type InvocationContext = { requestId: string; invocation: InvokeMessage['invocation']; upstream: Record<string, unknown>[] };
+const invocationContext = new AsyncLocalStorage<InvocationContext>();
 const invocationRequests = new Map<string, Set<AbortController>>();
 const allRequests = new Set<AbortController>();
 let requestHandler: ((data: unknown) => unknown) | undefined;
@@ -70,7 +72,9 @@ function safeLogValue(value: unknown): string {
 }
 
 function emitLog(level: LxLogLevel, args: unknown[]): void {
-  const message = args.map(safeLogValue).join(' ').slice(0, 4096);
+  const context = invocationContext.getStore();
+  const prefix = context ? `[request=${context.requestId} platform=${context.invocation.source} id=${context.invocation.musicInfo.id} quality=${context.invocation.quality}] ` : '';
+  const message = prefix + args.map(safeLogValue).map(safeDiagnosticText).join(' ').slice(0, 4096);
   port.postMessage({ type: 'log', level, message });
 }
 
@@ -89,7 +93,7 @@ function sourceConsole() {
 
 function registerController(controller: AbortController): () => void {
   allRequests.add(controller);
-  const invocationId = invocationContext.getStore();
+  const invocationId = invocationContext.getStore()?.requestId;
   if (invocationId) {
     const controllers = invocationRequests.get(invocationId) ?? new Set<AbortController>();
     controllers.add(controller);
@@ -184,6 +188,11 @@ function lxRequest(
   void axios.request<ArrayBuffer>(requestConfig).then((response) => {
     const raw = Buffer.from(response.data);
     const body = parseResponseBody(raw);
+    const context = invocationContext.getStore();
+    if (context) {
+      context.upstream.push(upstreamResponse(response.status, body));
+      if (context.upstream.length > 5) context.upstream.shift();
+    }
     callback(null, {
       statusCode: response.status,
       statusMessage: response.statusText,
@@ -193,6 +202,11 @@ function lxRequest(
       body
     }, body);
   }).catch((error: unknown) => {
+    const context = invocationContext.getStore();
+    if (context) {
+      context.upstream.push(diagnosticError(error));
+      if (context.upstream.length > 5) context.upstream.shift();
+    }
     callback(error, null, null);
   }).finally(unregister);
 
@@ -317,7 +331,11 @@ port.on('message', (message: ParentMessage) => {
     return;
   }
 
-  invocationContext.run(message.requestId, () => {
+  const context: InvocationContext = { requestId: message.requestId, invocation: message.invocation, upstream: [] };
+  const reportError = (error: unknown): void => {
+    port.postMessage({ type: 'result', requestId: message.requestId, error: { ...diagnosticError(error), upstream: context.upstream } });
+  };
+  invocationContext.run(context, () => {
     try {
       const result = requestHandler!({
         source: message.invocation.source,
@@ -331,14 +349,12 @@ port.on('message', (message: ParentMessage) => {
         throw new Error('LX request handler must return a Promise');
       }
       void Promise.resolve(result).then((value) => {
-        port.postMessage({ type: 'result', requestId: message.requestId, value });
+        port.postMessage({ type: 'result', requestId: message.requestId, value, upstream: context.upstream });
       }).catch((error: unknown) => {
-        const messageText = error instanceof Error ? error.message : String(error);
-        port.postMessage({ type: 'result', requestId: message.requestId, error: messageText });
+        reportError(error);
       });
     } catch (error) {
-      const messageText = error instanceof Error ? error.message : String(error);
-      port.postMessage({ type: 'result', requestId: message.requestId, error: messageText });
+      reportError(error);
     }
   });
 });
@@ -347,6 +363,6 @@ try {
   const script = new vm.Script(input.script, { filename: `${input.sourceInfo.name || 'lx-source'}.js` });
   script.runInContext(context, { timeout: 10_000 });
 } catch (error) {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = diagnosticError(error).message;
   port.postMessage({ type: 'initializationError', error: message });
 }
