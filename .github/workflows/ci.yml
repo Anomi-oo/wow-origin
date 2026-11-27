@@ -53,7 +53,7 @@ jobs:
             bundle: nsis
             artifact: wow-windows-x64
             path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
-          - os: macos-14
+          - os: macos-15
             target: aarch64-apple-darwin
             bundle: dmg
             artifact: wow-macos-arm64
