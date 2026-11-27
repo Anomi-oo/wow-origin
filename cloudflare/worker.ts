@@ -11,6 +11,7 @@ const ASSET_PATHS = new Set(['/', '/login', '/app.js', '/styles.css']);
 
 export interface Env {
   ADMIN_MANAGEMENT_PASSWORD?: string;
+  ALLOW_DOWNLOAD?: string;
   ORIGIN: DurableObjectNamespace<OriginDurableObject>;
   ASSETS: Fetcher;
 }
@@ -27,6 +28,7 @@ export class OriginDurableObject extends DurableObject<Env> {
       const lxSourceManager = new CloudflareLxSourceManager();
       this.app = await createApp({
         adminManagementPassword: env.ADMIN_MANAGEMENT_PASSWORD ?? '',
+        allowDownload: env.ALLOW_DOWNLOAD === 'true',
         accountStore,
         lxSourceManager,
         cloudflare: true,

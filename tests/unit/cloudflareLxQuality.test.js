@@ -1,6 +1,6 @@
 let mockKugouAlias = 'kg'
 jest.mock('../../cloudflare/generated/lx-source', () => ({
-  bundledLxSource: { enabled: true },
+  bundledLxSource: { enabled: true, name: '测试洛雪源', digest: 'a'.repeat(64) },
   installBundledLxSource: ({ lx }) => {
     lx.on(lx.EVENT_NAMES.request, async ({ source, info }) => {
       if (source === 'kg' || source === 'kugou') {

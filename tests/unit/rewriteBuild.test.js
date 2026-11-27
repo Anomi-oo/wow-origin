@@ -9,13 +9,21 @@ describe('universal rewrite build', () => {
   const releaseBase = 'https://github.com/Anomi-oo/wow-origin/releases/latest/download'
   const scriptUrl = `${releaseBase}/wow-origin.rewrite.js`
   const uiUrl = 'https://raw.githubusercontent.com/Anomi-oo/wow-origin/main/rewrite/ui/index.html'
+  let downloadEnabledSource
 
   beforeAll(() => {
+    buildRewrite('true')
+    downloadEnabledSource = fs.readFileSync(bundlePath, 'utf8')
+    buildRewrite('')
+  })
+
+  function buildRewrite(allowDownload) {
     execFileSync(process.execPath, ['rewrite/scripts/build.mjs'], {
       cwd: process.cwd(),
+      env: { ...process.env, ALLOW_DOWNLOAD: allowDownload },
       stdio: 'pipe'
     })
-  })
+  }
 
   function baseGlobals() {
     return {
@@ -235,6 +243,7 @@ describe('universal rewrite build', () => {
       Authorization: 'Bearer quanx-test-key'
     }))
     expect(status.status).toBe('HTTP/1.1 200 OK')
+    expect(JSON.parse(status.body).data.allowDownload).toBe(false)
     const capabilities = JSON.parse(status.body).data.capabilities
     expect(capabilities).toEqual(expect.arrayContaining([
       'searchTracks', 'searchArtists', 'searchAlbums', 'searchPlaylists', 'searchSuggest', 'roamTracks'
@@ -243,8 +252,7 @@ describe('universal rewrite build', () => {
     expect(capabilities).not.toContain('trackRoam')
   })
 
-  test('同一脚本在 Loon persistentStore 环境返回 response 对象', async () => {
-    const source = fs.readFileSync(bundlePath, 'utf8')
+  test('开启下载的构建在 Loon persistentStore 环境返回 response 对象', async () => {
     const values = new Map()
     const notifications = []
     const context = vm.createContext({
@@ -268,7 +276,7 @@ describe('universal rewrite build', () => {
       return new Promise((resolve, reject) => {
         context.$request = httpRequest
         context.$done = resolve
-        try { vm.runInContext(source, context) } catch (error) { reject(error) }
+        try { vm.runInContext(downloadEnabledSource, context) } catch (error) { reject(error) }
       })
     }
 
@@ -297,6 +305,6 @@ describe('universal rewrite build', () => {
       Authorization: 'Bearer loon-test-key'
     }))
     expect(status.response.status).toBe(200)
-    expect(JSON.parse(status.response.body).data.type).toBe('wow')
+    expect(JSON.parse(status.response.body).data).toMatchObject({ type: 'wow', allowDownload: true })
   })
 })

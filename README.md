@@ -47,6 +47,8 @@ CF_LX_SOURCE_URL=https://example.com/source.js
 
 Cloudflare 版只支持一个全局洛雪源。脚本会在构建时下载并编译进 Worker；更新源后需要重新部署
 
+若要开启 Aduoer 离线下载，在 Worker 的运行时 Secret 中将 `ALLOW_DOWNLOAD` 设为 `true`。
+
 ### EdgeOne Makers
 
 适用于腾讯云 EdgeOne Makers（原 EdgeOne Pages）：静态页面 + Cloud Functions（Node.js 20）+ EdgeOne Blob。账号数据和二维码/手机登录的临时状态都保存在 Blob，不依赖函数本地磁盘。
@@ -173,6 +175,7 @@ Aduoer 中填写同一地址，并使用页面生成的 Token
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
 | `ADMIN_MANAGEMENT_PASSWORD` | 空 | 网页管理员密钥；Docker / Node 环境变量或 Cloudflare 运行时 Secret |
+| `ALLOW_DOWNLOAD` | `false` | 设为 `true` 允许 Aduoer 离线下载，通过 `/v1/status` 声明。Node、Docker、Cloudflare Worker 和 EdgeOne 使用运行时环境变量，rewrite 在 `npm run rewrite:build` 时读取 |
 | `PORT` | `3000` | 服务端口 |
 | `HOST` | `0.0.0.0` | 监听地址 |
 | `LOG_LEVEL` | `info` | 日志级别 |

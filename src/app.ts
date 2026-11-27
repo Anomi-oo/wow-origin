@@ -42,6 +42,7 @@ class MultiPlatformServer {
   private readonly serveStatic: boolean;
   private readonly preload: boolean;
   private readonly adminManagementPassword: string;
+  private readonly allowDownload: boolean;
   private readonly loginStateStores?: LoginStateStores;
   private readonly loginPageHtml?: string;
   private readonly onRoutes?: (app: Express) => void;
@@ -51,6 +52,7 @@ class MultiPlatformServer {
 
   constructor(options: CreateAppOptions = {}) {
     this.adminManagementPassword = options.adminManagementPassword ?? process.env.ADMIN_MANAGEMENT_PASSWORD ?? '';
+    this.allowDownload = options.allowDownload ?? process.env.ALLOW_DOWNLOAD === 'true';
     this.logger = new Logger({ component: 'server' });
     this.accountStore = options.accountStore ?? loadLocalAccountStore();
     this.lxSourceManager = options.lxSourceManager ?? loadLocalLxSourceManager();
@@ -337,7 +339,7 @@ class MultiPlatformServer {
       }
     });
     this.app!.use(createWowRouter({
-      resolveContext: createWowContextResolver(this.accountSessions, this.lxSourceManager),
+      resolveContext: createWowContextResolver(this.accountSessions, this.lxSourceManager, this.allowDownload),
       onError: (error, request) => {
         if (error instanceof MissingCookieError) return;
         this.logger.error('Wow v1 request failed', error, { url: request.url });
@@ -511,6 +513,7 @@ class MultiPlatformServer {
 /** 创建并初始化 Express 应用；监听端口由 server.ts 负责。 */
 export interface CreateAppOptions {
   adminManagementPassword?: string;
+  allowDownload?: boolean;
   accountStore?: AccountStore;
   lxSourceManager?: AppLxSourceManager;
   cloudflare?: boolean;

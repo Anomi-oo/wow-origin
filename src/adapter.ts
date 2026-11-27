@@ -125,7 +125,8 @@ export function createAdapter(
 /** 将账号鉴权和 Adapter 选择接入 SDK；协议路由及响应校验由 SDK 负责。 */
 export function createWowContextResolver(
   registry: AccountSessionRegistry,
-  lxTrackUrlResolver?: LxTrackUrlResolver
+  lxTrackUrlResolver?: LxTrackUrlResolver,
+  allowDownload = false
 ): ResolveWowContext {
   return async ({ authorization, request }) => {
     const token = extractAuthorizationToken(authorization);
@@ -160,7 +161,8 @@ export function createWowContextResolver(
       adapter,
       qualityMap: getQualityOptions(account.platform),
       accountName: account.name,
-      stateless: account.stateless
+      stateless: account.stateless,
+      allowDownload
     };
   };
 }

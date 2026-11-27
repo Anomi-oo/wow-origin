@@ -105,7 +105,8 @@ export async function dispatchWowRoute(
       adapter,
       qualityMap: getQualityOptions(account.platform),
       accountName: account.name,
-      stateless: account.stateless
+      stateless: account.stateless,
+      allowDownload: process.env.ALLOW_DOWNLOAD === 'true'
     }, requestLike(request));
 
     const favoriteChanges: Partial<ProxyAccount> = {};

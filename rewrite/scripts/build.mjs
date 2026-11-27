@@ -118,6 +118,7 @@ async function main() {
     plugins: [resolveAliasPlugin()],
     define: {
       'process.env.NODE_ENV': '"production"',
+      'process.env.ALLOW_DOWNLOAD': JSON.stringify(process.env.ALLOW_DOWNLOAD === 'true' ? 'true' : 'false'),
       __REWRITE_HOST__: JSON.stringify(serviceUrl.hostname),
       __REWRITE_UI_URL__: JSON.stringify(uiUrl)
     },

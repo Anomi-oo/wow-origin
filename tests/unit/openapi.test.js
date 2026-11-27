@@ -7,6 +7,7 @@ jest.mock('../../dist/onload', () => ({
 const { MultiPlatformServer } = require('../../dist/app')
 const { preloadData } = require('../../dist/onload')
 const originalNodeEnv = process.env.NODE_ENV
+const originalAllowDownload = process.env.ALLOW_DOWNLOAD
 
 async function createApp(nodeEnv = 'development') {
   process.env.NODE_ENV = nodeEnv
@@ -21,7 +22,22 @@ describe('OpenAPI documentation', () => {
 
   afterEach(() => {
     process.env.NODE_ENV = originalNodeEnv
+    if (originalAllowDownload === undefined) delete process.env.ALLOW_DOWNLOAD
+    else process.env.ALLOW_DOWNLOAD = originalAllowDownload
   })
+
+  test.each([[undefined, false], ['false', false], ['TRUE', false], ['true', true]])(
+    'ALLOW_DOWNLOAD=%s 声明下载权限 %s', async (environmentValue, expected) => {
+      if (environmentValue === undefined) delete process.env.ALLOW_DOWNLOAD
+      else process.env.ALLOW_DOWNLOAD = environmentValue
+      const accountStore = {
+        list: () => [{ platform: 'qq', name: 'Test', api_access_key: 'key', cookie: 'uin=o123; qm_keyst=abc' }]
+      }
+      const app = await new MultiPlatformServer({ accountStore, preload: false }).initialize()
+      const status = await request(app).get('/v1/status').set('Authorization', 'key').expect(200)
+      expect(status.body.data.allowDownload).toBe(expected)
+    }
+  )
 
   test('账号收藏预加载未完成时仍可初始化 HTTP 应用', async () => {
     preloadData.mockImplementationOnce(() => new Promise(() => {}))
